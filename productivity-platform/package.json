@@ -9,11 +9,11 @@
     "start": "turbo run start",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "db:migrate": "turbo run db:migrate",
-    "db:seed": "turbo run db:seed",
-    "db:studio": "turbo run db:studio",
-    "docker:up": "docker-compose -f docker/docker-compose.yml up -d",
-    "docker:down": "docker-compose -f docker/docker-compose.yml down"
+    "db:generate": "npm run db:generate --workspace=@productivity-platform/database",
+    "db:migrate": "npm run db:migrate --workspace=@productivity-platform/database",
+    "db:seed": "npm run db:seed --workspace=@productivity-platform/database",
+    "db:studio": "npm run db:studio --workspace=@productivity-platform/database",
+    "db:reset": "npm run db:reset --workspace=@productivity-platform/database"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

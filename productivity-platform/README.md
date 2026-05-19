@@ -27,13 +27,10 @@ A modern, enterprise-grade productivity application similar to Todoist and TickT
 ### Backend
 - **Node.js** 20 LTS
 - **NestJS** for modular architecture
-- **Prisma** ORM with PostgreSQL
-- **Redis** for caching and queues
+- **Prisma** ORM with SQLite
 - **Passport.js** for authentication
-- **BullMQ** for job queues
 
 ### Infrastructure
-- **Docker** & Docker Compose
 - **Microsoft Graph API** for Outlook integration
 - **JWT** for authentication
 
@@ -46,7 +43,6 @@ productivity-platform/
 │   └── api/          # NestJS backend
 ├── packages/
 │   └── database/     # Prisma schema and client
-├── docker/           # Docker configuration
 └── docs/             # Documentation
 ```
 
@@ -55,7 +51,6 @@ productivity-platform/
 ### Prerequisites
 - Node.js 20+
 - npm 10+
-- Docker & Docker Compose
 
 ### 1. Clone and Install
 
@@ -71,33 +66,23 @@ cp .env.example .env
 # Edit .env with your Microsoft OAuth credentials
 ```
 
-### 3. Start Development Environment
-
-```bash
-# Start all services (database, redis, api, web)
-npm run docker:up
-
-# Or start individual services
-docker-compose -f docker/docker-compose.yml up postgres redis
-```
-
-### 4. Database Setup
+### 3. Database Setup
 
 ```bash
 # Generate Prisma client
 npm run db:generate --workspace=@productivity-platform/database
 
-# Run migrations
+# Run migrations (creates SQLite database)
 npm run db:migrate --workspace=@productivity-platform/database
 
 # Seed database with demo data
 npm run db:seed --workspace=@productivity-platform/database
 ```
 
-### 5. Run Applications
+### 4. Run Applications
 
 ```bash
-# Start everything (requires Docker services running)
+# Start all services
 npm run dev
 
 # Or start individually
@@ -161,13 +146,6 @@ npm run db:migrate     # Create and apply migrations
 npm run db:seed        # Seed database
 npm run db:studio      # Open Prisma Studio
 npm run db:reset       # Reset database
-```
-
-### Docker Commands
-
-```bash
-npm run docker:up      # Start all containers
-npm run docker:down    # Stop all containers
 ```
 
 ## 🤝 Contributing

@@ -280,11 +280,12 @@ src/auth/
 
 ### Probar el flujo completo:
 
-1. Iniciar servidores:
+1. Instalar dependencias y configurar base de datos:
 ```bash
-npm run docker:up
+npm install
+npm run db:generate
 npm run db:migrate
-npm run start:dev
+npm run dev
 ```
 
 2. Abrir navegador en:

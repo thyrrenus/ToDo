@@ -116,13 +116,10 @@ Crear una plataforma SaaS de productividad personal que compita con Todoist y Ti
 - **DDD**: Domain-Driven Design
 
 #### 3. Base de Datos
-- **PostgreSQL**: Datos relacionales principales
-- **Redis**: Cache, sesiones, colas
+- **SQLite**: Base de datos ligera para desarrollo y producción simple
 - **Prisma**: ORM type-safe
 
 #### 4. Infraestructura
-- **Docker**: Contenerización completa
-- **Kubernetes**: Orquestación (producción)
 - **CI/CD**: GitHub Actions
 
 ---
@@ -162,12 +159,8 @@ Crear una plataforma SaaS de productividad personal que compita con Todoist y Ti
 
 | Tecnología | Uso |
 |------------|-----|
-| Docker | Contenedores desarrollo/producción |
-| Docker Compose | Entorno local |
-| Nginx | Reverse proxy, SSL |
-| Redis | Cache, sesiones, colas |
-| PostgreSQL 15 | Base de datos principal |
-| pgBouncer | Connection pooling |
+| SQLite 3 | Base de datos principal |
+| Redis | Cache, sesiones, colas (opcional) |
 
 ### Microsoft Integration
 
