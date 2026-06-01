@@ -35,30 +35,51 @@ export default defineConfig({
         ],
         shortcuts: [
           {
-            name: 'Iniciar Enfoque Pomodoro',
-            short_name: 'Pomodoro',
-            description: 'Abre el temporizador Pomodoro flotante',
-            url: '/?view=pomodoro',
+            name: 'Añadir Tarea',
+            short_name: 'Add Task',
+            description: 'Crear una nueva tarea rápidamente',
+            url: '/?view=tasks&action=new',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           },
           {
-            name: 'Ver Calendario de Actividades',
-            short_name: 'Calendario',
-            description: 'Visualiza la agenda y eventos externos',
+            name: 'Hoy',
+            short_name: 'Today',
+            description: 'Ver mis tareas para hoy',
+            url: '/?view=tasks&list=today',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Inbox',
+            short_name: 'Inbox',
+            description: 'Ver bandeja de entrada',
+            url: '/?view=tasks&list=inbox',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Calendario',
+            short_name: 'Calendar',
+            description: 'Ver calendario y agenda',
             url: '/?view=calendar',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           },
           {
-            name: 'Ver Matriz de Eisenhower',
+            name: 'Enfoque Pomodoro',
+            short_name: 'Start Pomo',
+            description: 'Iniciar temporizador de enfoque',
+            url: '/?view=pomodoro',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Matriz de Eisenhower',
             short_name: 'Eisenhower',
-            description: 'Clasificación de prioridades urgente/importante',
+            description: 'Clasificar prioridades',
             url: '/?view=eisenhower',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           },
           {
-            name: 'Ver Tablero Kanban',
+            name: 'Tablero Kanban',
             short_name: 'Kanban',
-            description: 'Visualización ágil de flujo de trabajo',
+            description: 'Ver flujo de trabajo',
             url: '/?view=kanban',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           }

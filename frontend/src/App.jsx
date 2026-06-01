@@ -236,7 +236,18 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [lists, setLists] = useState([]);
   const [sections, setSections] = useState([]);
-  const [activeList, setActiveList] = useState('inbox'); // 'inbox', 'today', 'upcoming' or list ID
+  const [activeList, setActiveList] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const list = params.get('list');
+      if (list === 'today' || list === 'upcoming' || list === 'inbox') return list;
+      const listId = Number(list);
+      if (!isNaN(listId) && listId > 0) return listId;
+      return 'inbox';
+    } catch (e) {
+      return 'inbox';
+    }
+  }); // 'inbox', 'today', 'upcoming' or list ID
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -505,7 +516,17 @@ function App() {
       return;
     }
     setLoading(true);
-    Promise.all([fetchTasks(), fetchLists(), fetchSections()]).then(() => setLoading(false));
+    Promise.all([fetchTasks(), fetchLists(), fetchSections()]).then(() => {
+      setLoading(false);
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get('action');
+      if (action === 'new') {
+        setTimeout(() => {
+          const input = document.querySelector('.quick-add-bar input');
+          if (input) input.focus();
+        }, 300);
+      }
+    });
     
     // Fetch external events on app mount
     const userId = user?.id;
