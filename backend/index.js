@@ -146,6 +146,10 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   res.json({ url: imageUrl });
 });
 
+app.get('/api/debug-version', (req, res) => {
+  res.json({ version: 'f933c36' });
+});
+
 const port = process.env.PORT || 3001;
 
 // --- LISTS ---
