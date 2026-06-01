@@ -106,7 +106,7 @@ export function LoginView({ onSuccess }) {
             <Sparkles size={24} />
           </div>
           <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.03em', marginBottom: '8px' }}>
-            {isRegister ? 'Crear tu Cuenta' : 'Cockpit ToDo'}
+            {isRegister ? 'Crear tu Cuenta' : 'ToDo'}
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#9e9e9e' }}>
             {isRegister 

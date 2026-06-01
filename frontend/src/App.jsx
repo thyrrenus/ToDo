@@ -14,6 +14,7 @@ import { SettingsView } from './components/SettingsView';
 import { LoginView } from './components/LoginView';
 import { ProjectKanbanView } from './components/ProjectKanbanView';
 import { SectionHeader } from './components/SectionHeader';
+import { AdminView } from './components/AdminView';
 import { Inbox, Plus } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from './utils/notifications';
@@ -226,7 +227,7 @@ function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       const view = params.get('view');
-      const validViews = ['tasks', 'calendar', 'pomodoro', 'eisenhower', 'gtd', 'kanban', 'settings', 'analytics'];
+      const validViews = ['tasks', 'calendar', 'pomodoro', 'eisenhower', 'gtd', 'kanban', 'settings', 'analytics', 'admin'];
       return (view && validViews.includes(view)) ? view : 'tasks';
     } catch (e) {
       return 'tasks';
@@ -1012,6 +1013,8 @@ function App() {
                 }
               }}
             />
+          ) : mainView === 'admin' ? (
+            <AdminView />
           ) : (
             <AnalyticsView 
               tasks={tasks}

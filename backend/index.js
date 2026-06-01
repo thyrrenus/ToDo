@@ -14,7 +14,7 @@ app.use(express.json());
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-cockpit-todo-9988';
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-todo-9988';
 
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
@@ -55,14 +55,16 @@ app.post('/api/auth/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insert user
-    const info = await db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)').run(username, email, passwordHash);
-    const userId = info.lastInsertRowid;
-
-    // Check if this is the first user registered
+    // Check if this is the first user registered to assign admin role
     const userCountRes = await db.prepare('SELECT COUNT(*) as count FROM users').get();
     const userCount = userCountRes ? userCountRes.count : 0;
-    if (userCount === 1) {
+    const role = userCount === 0 ? 'admin' : 'user';
+
+    // Insert user
+    const info = await db.prepare('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)').run(username, email, passwordHash, role);
+    const userId = info.lastInsertRowid;
+
+    if (userCount === 0) {
       // Migrate existing orphaned tasks, lists, and sections to this first user
       await db.prepare('UPDATE lists SET user_id = ? WHERE user_id IS NULL').run(userId);
       await db.prepare('UPDATE sections SET user_id = ? WHERE user_id IS NULL').run(userId);
@@ -72,7 +74,7 @@ app.post('/api/auth/register', async (req, res) => {
       await db.prepare("INSERT INTO lists (name, color, user_id) VALUES ('Inbox', '#3b82f6', ?)").run(userId);
     }
 
-    const newUser = await db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(userId);
+    const newUser = await db.prepare('SELECT id, username, email, role FROM users WHERE id = ?').get(userId);
     const token = jwt.sign(newUser, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({ token, user: newUser });
@@ -101,7 +103,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Credenciales inválidas.' });
     }
 
-    const userData = { id: user.id, username: user.username, email: user.email };
+    const userData = { id: user.id, username: user.username, email: user.email, role: user.role };
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({ token, user: userData });
@@ -577,6 +579,86 @@ app.get('/api/external-events', async (req, res) => {
   } catch (err) {
     console.error('Error in external-events proxy:', err.message);
     res.status(500).json({ error: `No se pudo obtener o procesar el calendario: ${err.message}` });
+  }
+});
+
+// --- ADMINISTRATOR ENDPOINTS ---
+
+const requireAdmin = (req, res, next) => {
+  if (req.user && req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ error: 'Acceso denegado. Se requieren privilegios de administrador.' });
+  }
+};
+
+// 1. Get all users with task/list counts
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const users = await db.prepare(`
+      SELECT id, username, email, role, created_at
+      FROM users
+      ORDER BY created_at DESC
+    `).all();
+
+    // Query stats for each user asynchronously
+    const usersWithStats = await Promise.all(users.map(async (u) => {
+      const taskCountRes = await db.prepare('SELECT COUNT(*) as count FROM tasks WHERE user_id = ?').get(u.id);
+      const listCountRes = await db.prepare('SELECT COUNT(*) as count FROM lists WHERE user_id = ?').get(u.id);
+      return {
+        ...u,
+        task_count: taskCountRes ? taskCountRes.count : 0,
+        list_count: listCountRes ? listCountRes.count : 0
+      };
+    }));
+
+    res.json(usersWithStats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Change user role
+app.put('/api/admin/users/:id/role', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  if (role !== 'admin' && role !== 'user') {
+    return res.status(400).json({ error: 'Rol no válido. Debe ser admin o user.' });
+  }
+
+  try {
+    await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Delete user account and cascade items safely
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  if (Number(id) === req.user.id) {
+    return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta de administrador.' });
+  }
+
+  try {
+    // Delete user's subtasks, tasks, sections, and lists manually to ensure clean DB
+    const lists = await db.prepare('SELECT id FROM lists WHERE user_id = ?').all(id);
+    const listIds = lists.map(l => l.id);
+    if (listIds.length > 0) {
+      const placeholders = listIds.map(() => '?').join(',');
+      await db.prepare(`DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE list_id IN (${placeholders}))`).run(...listIds);
+    }
+    await db.prepare('DELETE FROM tasks WHERE user_id = ?').run(id);
+    await db.prepare('DELETE FROM sections WHERE user_id = ?').run(id);
+    await db.prepare('DELETE FROM lists WHERE user_id = ?').run(id);
+    await db.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

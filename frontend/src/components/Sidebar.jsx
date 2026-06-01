@@ -97,7 +97,7 @@ export function Sidebar({ activeList, setActiveList, lists, onRefreshLists }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <span>✓</span> Antigravity Tasks
+        <span>✓</span> Tasks
       </div>
 
       <div className="nav-section">

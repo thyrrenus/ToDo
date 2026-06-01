@@ -75,6 +75,7 @@ const initDb = async () => {
       username TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -137,6 +138,7 @@ const initDb = async () => {
     ALTER TABLE lists ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
     ALTER TABLE sections ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
     ALTER TABLE tasks ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
   `);
 
   // 3. Ensure a default list if empty
@@ -147,6 +149,17 @@ const initDb = async () => {
     }
   } catch (e) {
     console.error('Error inserting default list:', e.message);
+  }
+
+  // 4. Ensure the oldest user is admin
+  try {
+    const oldestUser = await db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get();
+    if (oldestUser) {
+      await db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(oldestUser.id);
+      console.log('Oldest user promoted to admin:', oldestUser.id);
+    }
+  } catch (e) {
+    console.error('Error promoting oldest user:', e.message);
   }
 };
 

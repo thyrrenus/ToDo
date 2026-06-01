@@ -11,8 +11,8 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'Cockpit de Productividad ToDo',
-        short_name: 'ToDo Cockpit',
+        name: 'ToDo',
+        short_name: 'ToDo',
         description: 'Gestor de tareas inteligente con Pomodoro y asistente de IA offline',
         theme_color: '#121212',
         background_color: '#121212',

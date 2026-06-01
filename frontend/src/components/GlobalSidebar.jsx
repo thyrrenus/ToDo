@@ -1,4 +1,4 @@
-import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Settings, LogOut } from 'lucide-react';
+import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Settings, Shield, LogOut } from 'lucide-react';
 
 export function GlobalSidebar({ mainView, setMainView, onLogout, user }) {
   return (
@@ -52,6 +52,16 @@ export function GlobalSidebar({ mainView, setMainView, onLogout, user }) {
       >
         <BarChart2 size={24} />
       </button>
+      {user?.role === 'admin' && (
+        <button 
+          className={`global-nav-item ${mainView === 'admin' ? 'active' : ''}`}
+          onClick={() => setMainView('admin')}
+          title="Panel de Administración"
+          style={{ color: '#a78bfa' }}
+        >
+          <Shield size={24} />
+        </button>
+      )}
       <button 
         className={`global-nav-item ${mainView === 'settings' ? 'active' : ''}`}
         onClick={() => setMainView('settings')}
