@@ -9,7 +9,7 @@ import {
   sendNotification 
 } from '../utils/notifications';
 
-export function SettingsView({ tasks, lists, onRefreshTasks }) {
+export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
   // --- LOAD FROM LOCAL STORAGE OR SET DEFAULTS ---
   const [userName, setUserName] = useState(() => localStorage.getItem('userName') || 'Carlos');
   const [dailyTaskLimit, setDailyTaskLimit] = useState(() => parseInt(localStorage.getItem('dailyTaskLimit') || '5'));
@@ -23,9 +23,18 @@ export function SettingsView({ tasks, lists, onRefreshTasks }) {
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('appAccentColor') || '#7c3aed');
   const [bgStyle, setBgStyle] = useState(() => localStorage.getItem('appBgStyle') || '#121212');
   const [outlookIcalUrl, setOutlookIcalUrl] = useState(() => {
-    const saved = localStorage.getItem('outlookIcalUrl');
-    if (saved !== null) return saved;
-    return 'https://outlook.office365.com/owa/calendar/58d72e5354c04cf6a0abdd36dcd8429d@afpmodelo.cl/6e2d4535dc4543f0b51e510dd30064c410332200703118504817/calendar.ics';
+    if (!user) return '';
+    const scopedSaved = localStorage.getItem(`outlookIcalUrl_${user.id}`);
+    if (scopedSaved !== null) return scopedSaved;
+
+    // Auto-migrate Carlos's old unscoped URL if it exists
+    const oldSaved = localStorage.getItem('outlookIcalUrl');
+    if (oldSaved !== null) {
+      localStorage.setItem(`outlookIcalUrl_${user.id}`, oldSaved);
+      localStorage.removeItem('outlookIcalUrl');
+      return oldSaved;
+    }
+    return '';
   });
 
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -123,7 +132,11 @@ export function SettingsView({ tasks, lists, onRefreshTasks }) {
     localStorage.setItem('pomodoroVolume', pomodoroVolume.toString());
     localStorage.setItem('appAccentColor', accentColor);
     localStorage.setItem('appBgStyle', bgStyle);
-    localStorage.setItem('outlookIcalUrl', outlookIcalUrl);
+    if (user) {
+      localStorage.setItem(`outlookIcalUrl_${user.id}`, outlookIcalUrl);
+    } else {
+      localStorage.setItem('outlookIcalUrl', outlookIcalUrl);
+    }
     localStorage.setItem('enableWebNotifications', enableWebNotifications ? 'true' : 'false');
     localStorage.setItem('enableTaskAlerts', enableTaskAlerts ? 'true' : 'false');
     localStorage.setItem('enablePomodoroAlerts', enablePomodoroAlerts ? 'true' : 'false');

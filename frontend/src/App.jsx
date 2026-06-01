@@ -244,9 +244,19 @@ function App() {
   const [projectLayout, setProjectLayout] = useState('list'); // 'list' or 'kanban'
   const [externalEvents, setExternalEvents] = useState([]);
   const [outlookIcalUrl, setOutlookIcalUrl] = useState(() => {
-    const saved = localStorage.getItem('outlookIcalUrl');
-    if (saved !== null) return saved;
-    return 'https://outlook.office365.com/owa/calendar/58d72e5354c04cf6a0abdd36dcd8429d@afpmodelo.cl/6e2d4535dc4543f0b51e510dd30064c410332200703118504817/calendar.ics';
+    const userId = user?.id;
+    if (!userId) return '';
+    const scopedSaved = localStorage.getItem(`outlookIcalUrl_${userId}`);
+    if (scopedSaved !== null) return scopedSaved;
+
+    // Auto-migrate Carlos's old unscoped URL if it exists
+    const oldSaved = localStorage.getItem('outlookIcalUrl');
+    if (oldSaved !== null) {
+      localStorage.setItem(`outlookIcalUrl_${userId}`, oldSaved);
+      localStorage.removeItem('outlookIcalUrl');
+      return oldSaved;
+    }
+    return '';
   });
 
   const fetchExternalEvents = async (urlToFetch) => {
@@ -497,11 +507,16 @@ function App() {
     Promise.all([fetchTasks(), fetchLists(), fetchSections()]).then(() => setLoading(false));
     
     // Fetch external events on app mount
-    const savedUrl = localStorage.getItem('outlookIcalUrl');
-    const url = savedUrl !== null ? savedUrl : 'https://outlook.office365.com/owa/calendar/58d72e5354c04cf6a0abdd36dcd8429d@afpmodelo.cl/6e2d4535dc4543f0b51e510dd30064c410332200703118504817/calendar.ics';
-    if (url) {
-      setOutlookIcalUrl(url);
-      fetchExternalEvents(url);
+    const userId = user?.id;
+    if (userId) {
+      const url = localStorage.getItem(`outlookIcalUrl_${userId}`);
+      if (url) {
+        setOutlookIcalUrl(url);
+        fetchExternalEvents(url);
+      } else {
+        setOutlookIcalUrl('');
+        setExternalEvents([]);
+      }
     }
 
     // Persistent theme loader on app mount
@@ -559,13 +574,12 @@ function App() {
   }, [token]);
 
   useEffect(() => {
-    if (mainView === 'calendar') {
-      const savedUrl = localStorage.getItem('outlookIcalUrl');
-      const url = savedUrl !== null ? savedUrl : 'https://outlook.office365.com/owa/calendar/58d72e5354c04cf6a0abdd36dcd8429d@afpmodelo.cl/6e2d4535dc4543f0b51e510dd30064c410332200703118504817/calendar.ics';
+    if (mainView === 'calendar' && user?.id) {
+      const url = localStorage.getItem(`outlookIcalUrl_${user.id}`) || '';
       setOutlookIcalUrl(url);
       fetchExternalEvents(url);
     }
-  }, [mainView]);
+  }, [mainView, user]);
 
   const handleToggleTask = async (id, currentStatus) => {
     try {
@@ -986,14 +1000,16 @@ function App() {
             />
           ) : mainView === 'settings' ? (
             <SettingsView 
+              user={user}
               tasks={tasks}
               lists={lists}
               onRefreshTasks={() => {
                 fetchTasks();
-                const savedUrl = localStorage.getItem('outlookIcalUrl');
-                const url = savedUrl !== null ? savedUrl : 'https://outlook.office365.com/owa/calendar/58d72e5354c04cf6a0abdd36dcd8429d@afpmodelo.cl/6e2d4535dc4543f0b51e510dd30064c410332200703118504817/calendar.ics';
-                setOutlookIcalUrl(url);
-                fetchExternalEvents(url);
+                if (user?.id) {
+                  const url = localStorage.getItem(`outlookIcalUrl_${user.id}`) || '';
+                  setOutlookIcalUrl(url);
+                  fetchExternalEvents(url);
+                }
               }}
             />
           ) : (
