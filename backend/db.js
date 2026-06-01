@@ -45,17 +45,19 @@ const db = {
 
   // Prepare a statement for execution
   prepare(sql) {
+    const sanitizeArgs = (args) => args.map(arg => arg === undefined ? null : arg);
+
     return {
       async all(...args) {
-        const res = await client.execute({ sql, args });
+        const res = await client.execute({ sql, args: sanitizeArgs(args) });
         return res.rows;
       },
       async get(...args) {
-        const res = await client.execute({ sql, args });
+        const res = await client.execute({ sql, args: sanitizeArgs(args) });
         return res.rows[0] || null;
       },
       async run(...args) {
-        const res = await client.execute({ sql, args });
+        const res = await client.execute({ sql, args: sanitizeArgs(args) });
         return {
           lastInsertRowid: res.lastInsertRowid ? Number(res.lastInsertRowid) : null,
           rowsAffected: res.rowsAffected
