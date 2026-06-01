@@ -46,7 +46,7 @@ app.post('/api/auth/register', async (req, res) => {
 
   try {
     // Check if user already exists
-    const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const existingUser = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (existingUser) {
       return res.status(400).json({ error: 'El correo electrónico ya está registrado.' });
     }
@@ -56,22 +56,23 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     // Insert user
-    const info = db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)').run(username, email, passwordHash);
+    const info = await db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)').run(username, email, passwordHash);
     const userId = info.lastInsertRowid;
 
     // Check if this is the first user registered
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+    const userCountRes = await db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const userCount = userCountRes ? userCountRes.count : 0;
     if (userCount === 1) {
       // Migrate existing orphaned tasks, lists, and sections to this first user
-      db.prepare('UPDATE lists SET user_id = ? WHERE user_id IS NULL').run(userId);
-      db.prepare('UPDATE sections SET user_id = ? WHERE user_id IS NULL').run(userId);
-      db.prepare('UPDATE tasks SET user_id = ? WHERE user_id IS NULL').run(userId);
+      await db.prepare('UPDATE lists SET user_id = ? WHERE user_id IS NULL').run(userId);
+      await db.prepare('UPDATE sections SET user_id = ? WHERE user_id IS NULL').run(userId);
+      await db.prepare('UPDATE tasks SET user_id = ? WHERE user_id IS NULL').run(userId);
     } else {
       // Create a default Inbox list for this new user
-      db.prepare("INSERT INTO lists (name, color, user_id) VALUES ('Inbox', '#3b82f6', ?)").run(userId);
+      await db.prepare("INSERT INTO lists (name, color, user_id) VALUES ('Inbox', '#3b82f6', ?)").run(userId);
     }
 
-    const newUser = db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(userId);
+    const newUser = await db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(userId);
     const token = jwt.sign(newUser, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({ token, user: newUser });
@@ -89,7 +90,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) {
       return res.status(400).json({ error: 'Credenciales inválidas.' });
     }
@@ -140,51 +141,52 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No image provided' });
   }
-  const imageUrl = `http://localhost:${process.env.PORT || 3001}/uploads/${req.file.filename}`;
+  const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+  const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
   res.json({ url: imageUrl });
 });
 
 const port = process.env.PORT || 3001;
 
 // --- LISTS ---
-app.get('/api/lists', authenticateToken, (req, res) => {
+app.get('/api/lists', authenticateToken, async (req, res) => {
   try {
-    const lists = db.prepare('SELECT * FROM lists WHERE user_id = ?').all(req.user.id);
+    const lists = await db.prepare('SELECT * FROM lists WHERE user_id = ?').all(req.user.id);
     res.json(lists);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/lists', authenticateToken, (req, res) => {
+app.post('/api/lists', authenticateToken, async (req, res) => {
   const { name, color } = req.body;
   try {
-    const info = db.prepare('INSERT INTO lists (name, color, user_id) VALUES (?, ?, ?)').run(name, color, req.user.id);
-    const newList = db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
+    const info = await db.prepare('INSERT INTO lists (name, color, user_id) VALUES (?, ?, ?)').run(name, color, req.user.id);
+    const newList = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
     res.json(newList);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/api/lists/:id', authenticateToken, (req, res) => {
+app.put('/api/lists/:id', authenticateToken, async (req, res) => {
   const { name, color } = req.body;
   const { id } = req.params;
   try {
-    db.prepare('UPDATE lists SET name = ?, color = ? WHERE id = ? AND user_id = ?').run(name, color, id, req.user.id);
-    const updatedList = db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    await db.prepare('UPDATE lists SET name = ?, color = ? WHERE id = ? AND user_id = ?').run(name, color, id, req.user.id);
+    const updatedList = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(id, req.user.id);
     res.json(updatedList);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/lists/:id', authenticateToken, (req, res) => {
+app.delete('/api/lists/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     // Optional: Delete all tasks in the list first
-    db.prepare('DELETE FROM tasks WHERE list_id = ? AND user_id = ?').run(id, req.user.id);
-    db.prepare('DELETE FROM lists WHERE id = ? AND user_id = ?').run(id, req.user.id);
+    await db.prepare('DELETE FROM tasks WHERE list_id = ? AND user_id = ?').run(id, req.user.id);
+    await db.prepare('DELETE FROM lists WHERE id = ? AND user_id = ?').run(id, req.user.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -192,51 +194,51 @@ app.delete('/api/lists/:id', authenticateToken, (req, res) => {
 });
 
 // --- SECTIONS ---
-app.get('/api/sections', authenticateToken, (req, res) => {
+app.get('/api/sections', authenticateToken, async (req, res) => {
   try {
-    const sections = db.prepare('SELECT * FROM sections WHERE user_id = ? ORDER BY order_index ASC').all(req.user.id);
+    const sections = await db.prepare('SELECT * FROM sections WHERE user_id = ? ORDER BY order_index ASC').all(req.user.id);
     res.json(sections);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/sections', authenticateToken, (req, res) => {
+app.post('/api/sections', authenticateToken, async (req, res) => {
   const { list_id, name, order_index } = req.body;
   try {
-    const info = db.prepare('INSERT INTO sections (list_id, name, order_index, user_id) VALUES (?, ?, ?, ?)').run(list_id, name, order_index || 0, req.user.id);
-    const newSection = db.prepare('SELECT * FROM sections WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
+    const info = await db.prepare('INSERT INTO sections (list_id, name, order_index, user_id) VALUES (?, ?, ?, ?)').run(list_id, name, order_index || 0, req.user.id);
+    const newSection = await db.prepare('SELECT * FROM sections WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
     res.json(newSection);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/api/sections/:id', authenticateToken, (req, res) => {
+app.put('/api/sections/:id', authenticateToken, async (req, res) => {
   const { name, is_collapsed, order_index } = req.body;
   const { id } = req.params;
   try {
-    const current = db.prepare('SELECT * FROM sections WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const current = await db.prepare('SELECT * FROM sections WHERE id = ? AND user_id = ?').get(id, req.user.id);
     if (!current) return res.status(404).json({ error: 'Section not found' });
 
-    db.prepare('UPDATE sections SET name = ?, is_collapsed = ?, order_index = ? WHERE id = ? AND user_id = ?').run(
+    await db.prepare('UPDATE sections SET name = ?, is_collapsed = ?, order_index = ? WHERE id = ? AND user_id = ?').run(
       name !== undefined ? name : current.name,
       is_collapsed !== undefined ? is_collapsed : current.is_collapsed,
       order_index !== undefined ? order_index : current.order_index,
       id,
       req.user.id
     );
-    const updatedSection = db.prepare('SELECT * FROM sections WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const updatedSection = await db.prepare('SELECT * FROM sections WHERE id = ? AND user_id = ?').get(id, req.user.id);
     res.json(updatedSection);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/sections/:id', authenticateToken, (req, res) => {
+app.delete('/api/sections/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM sections WHERE id = ? AND user_id = ?').run(id, req.user.id);
+    await db.prepare('DELETE FROM sections WHERE id = ? AND user_id = ?').run(id, req.user.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -244,15 +246,15 @@ app.delete('/api/sections/:id', authenticateToken, (req, res) => {
 });
 
 // --- TASKS ---
-app.get('/api/tasks', authenticateToken, (req, res) => {
+app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
-    const tasks = db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
+    const tasks = await db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
     if (tasks.length === 0) {
       return res.json([]);
     }
     const taskIds = tasks.map(t => t.id);
     const placeholders = taskIds.map(() => '?').join(',');
-    const subtasks = db.prepare(`SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY created_at ASC`).all(...taskIds);
+    const subtasks = await db.prepare(`SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY created_at ASC`).all(...taskIds);
     
     // Group subtasks by task_id
     const tasksWithSubtasks = tasks.map(task => {
@@ -266,30 +268,30 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
   }
 });
 
-app.post('/api/tasks', authenticateToken, (req, res) => {
+app.post('/api/tasks', authenticateToken, async (req, res) => {
   const { list_id, section_id, title, description, due_date, start_time, end_time, priority } = req.body;
   try {
-    const info = db.prepare(`
+    const info = await db.prepare(`
       INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(list_id, section_id || null, title, description, due_date, start_time || null, end_time || null, priority || 0, req.user.id);
-    const newTask = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
+    const newTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
     res.json(newTask);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/api/tasks/:id', authenticateToken, (req, res) => {
+app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
   const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id } = req.body;
   const { id } = req.params;
   try {
-    const current = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const current = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
     if (!current) {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE tasks 
       SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ? 
       WHERE id = ? AND user_id = ?
@@ -307,22 +309,22 @@ app.put('/api/tasks/:id', authenticateToken, (req, res) => {
       req.user.id
     );
 
-    const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const updatedTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
     res.json(updatedTask);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/tasks/:id', authenticateToken, (req, res) => {
+app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
-    const current = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const current = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
     if (!current) {
       return res.status(404).json({ error: 'Task not found' });
     }
-    db.prepare('DELETE FROM subtasks WHERE task_id = ?').run(id);
-    db.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').run(id, req.user.id);
+    await db.prepare('DELETE FROM subtasks WHERE task_id = ?').run(id);
+    await db.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').run(id, req.user.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -330,37 +332,37 @@ app.delete('/api/tasks/:id', authenticateToken, (req, res) => {
 });
 
 // --- SUBTASKS ---
-app.post('/api/subtasks', authenticateToken, (req, res) => {
+app.post('/api/subtasks', authenticateToken, async (req, res) => {
   const { task_id, title, description, due_date, start_time, end_time } = req.body;
   try {
-    const parentTask = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(task_id, req.user.id);
+    const parentTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(task_id, req.user.id);
     if (!parentTask) {
       return res.status(403).json({ error: 'No autorizado para esta tarea' });
     }
 
-    const info = db.prepare('INSERT INTO subtasks (task_id, title, description, due_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)').run(
+    const info = await db.prepare('INSERT INTO subtasks (task_id, title, description, due_date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)').run(
       task_id, title, description || null, due_date || null, start_time || null, end_time || null
     );
-    const newSubtask = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(info.lastInsertRowid);
+    const newSubtask = await db.prepare('SELECT * FROM subtasks WHERE id = ?').get(info.lastInsertRowid);
     res.json(newSubtask);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/api/subtasks/:id', authenticateToken, (req, res) => {
+app.put('/api/subtasks/:id', authenticateToken, async (req, res) => {
   const { title, description, is_completed, due_date, start_time, end_time } = req.body;
   const { id } = req.params;
   try {
-    const current = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Subtask not found' });
 
-    const parentTask = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(current.task_id, req.user.id);
+    const parentTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(current.task_id, req.user.id);
     if (!parentTask) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    db.prepare('UPDATE subtasks SET title = ?, description = ?, is_completed = ?, due_date = ?, start_time = ?, end_time = ? WHERE id = ?').run(
+    await db.prepare('UPDATE subtasks SET title = ?, description = ?, is_completed = ?, due_date = ?, start_time = ?, end_time = ? WHERE id = ?').run(
       title !== undefined ? title : current.title,
       description !== undefined ? description : current.description,
       is_completed !== undefined ? is_completed : current.is_completed,
@@ -369,25 +371,25 @@ app.put('/api/subtasks/:id', authenticateToken, (req, res) => {
       end_time !== undefined ? end_time : current.end_time,
       id
     );
-    const updatedSubtask = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
+    const updatedSubtask = await db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
     res.json(updatedSubtask);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/subtasks/:id', authenticateToken, (req, res) => {
+app.delete('/api/subtasks/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
-    const current = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM subtasks WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Subtask not found' });
 
-    const parentTask = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(current.task_id, req.user.id);
+    const parentTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(current.task_id, req.user.id);
     if (!parentTask) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    db.prepare('DELETE FROM subtasks WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM subtasks WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

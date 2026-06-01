@@ -20,20 +20,31 @@ import { sendNotification } from './utils/notifications';
 
 // --- SECURE API FETCH INTERCEPTOR FOR JWT ---
 const originalFetch = window.fetch;
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 window.fetch = async function (url, options = {}) {
   const token = localStorage.getItem('todo_token');
-  if (typeof url === 'string' && url.includes('/api/') && token) {
-    options.headers = options.headers || {};
-    if (!(options.headers instanceof Headers)) {
-      options.headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${token}`
-      };
-    } else {
-      options.headers.set('Authorization', `Bearer ${token}`);
+  let targetUrl = url;
+
+  if (typeof url === 'string' && url.includes('/api/')) {
+    if (url.startsWith('/api/')) {
+      targetUrl = `${API_URL}${url}`;
+    }
+
+    if (token) {
+      options.headers = options.headers || {};
+      if (!(options.headers instanceof Headers)) {
+        options.headers = {
+          ...options.headers,
+          'Authorization': `Bearer ${token}`
+        };
+      } else {
+        options.headers.set('Authorization', `Bearer ${token}`);
+      }
     }
   }
-  const response = await originalFetch(url, options);
+
+  const response = await originalFetch(targetUrl, options);
   if (typeof url === 'string' && url.includes('/api/') && (response.status === 401 || response.status === 403)) {
     localStorage.removeItem('todo_token');
     localStorage.removeItem('todo_user');
