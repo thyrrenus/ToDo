@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5d4" />
+      <stop offset="100%" stop-color="#05a3c7" />
+    </linearGradient>
+  </defs>
+  <!-- Sleek dark background squircle -->
+  <rect width="450" height="450" x="31" y="31" rx="110" fill="#0d0e12" stroke="rgba(0, 245, 212, 0.08)" stroke-width="3" />
+  
+  <!-- Continuous 'T' + Checkmark line -->
+  <path d="M150 190h180M240 190v120c0 30 20 45 50 45c25 0 45-12 65-38" stroke="url(#tealGrad)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  
+  <!-- Minimalist neon dot for focus (Pomodoro) -->
+  <circle cx="360" cy="190" r="22" fill="#00f5d4" />
+</svg>
