@@ -169,7 +169,16 @@ function App() {
     }
   });
 
-  const [mainView, setMainView] = useState('tasks'); // 'tasks' or 'calendar'
+  const [mainView, setMainView] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get('view');
+      const validViews = ['tasks', 'calendar', 'pomodoro', 'eisenhower', 'gtd', 'kanban', 'settings', 'analytics'];
+      return (view && validViews.includes(view)) ? view : 'tasks';
+    } catch (e) {
+      return 'tasks';
+    }
+  });
   const [tasks, setTasks] = useState([]);
   const [lists, setLists] = useState([]);
   const [sections, setSections] = useState([]);

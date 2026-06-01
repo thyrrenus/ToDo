@@ -32,6 +32,36 @@ export default defineConfig({
             type: 'image/svg+xml',
             purpose: 'any'
           }
+        ],
+        shortcuts: [
+          {
+            name: 'Iniciar Enfoque Pomodoro',
+            short_name: 'Pomodoro',
+            description: 'Abre el temporizador Pomodoro flotante',
+            url: '/?view=pomodoro',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Ver Calendario de Actividades',
+            short_name: 'Calendario',
+            description: 'Visualiza la agenda y eventos externos',
+            url: '/?view=calendar',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Ver Matriz de Eisenhower',
+            short_name: 'Eisenhower',
+            description: 'Clasificación de prioridades urgente/importante',
+            url: '/?view=eisenhower',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Ver Tablero Kanban',
+            short_name: 'Kanban',
+            description: 'Visualización ágil de flujo de trabajo',
+            url: '/?view=kanban',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          }
         ]
       },
       workbox: {
