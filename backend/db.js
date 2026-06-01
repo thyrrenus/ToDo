@@ -6,6 +6,14 @@ const db = new Database(dbPath, { verbose: console.log });
 
 const initDb = () => {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS lists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -61,6 +69,11 @@ const initDb = () => {
   try { db.exec("ALTER TABLE subtasks ADD COLUMN start_time DATETIME;"); } catch(e) {}
   try { db.exec("ALTER TABLE subtasks ADD COLUMN end_time DATETIME;"); } catch(e) {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN section_id INTEGER REFERENCES sections(id) ON DELETE SET NULL;"); } catch(e) {}
+  
+  // Migration for multi-user system
+  try { db.exec("ALTER TABLE lists ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;"); } catch(e) {}
+  try { db.exec("ALTER TABLE sections ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;"); } catch(e) {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;"); } catch(e) {}
   
   // Insert an inbox list if no lists exist
   const count = db.prepare('SELECT COUNT(*) as count FROM lists').get().count;

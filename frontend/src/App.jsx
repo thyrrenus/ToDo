@@ -11,11 +11,36 @@ import { GTDView } from './components/GTDView';
 import { KanbanView } from './components/KanbanView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
+import { LoginView } from './components/LoginView';
 import { ProjectKanbanView } from './components/ProjectKanbanView';
 import { SectionHeader } from './components/SectionHeader';
 import { Inbox, Plus } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from './utils/notifications';
+
+// --- SECURE API FETCH INTERCEPTOR FOR JWT ---
+const originalFetch = window.fetch;
+window.fetch = async function (url, options = {}) {
+  const token = localStorage.getItem('todo_token');
+  if (typeof url === 'string' && url.includes('/api/') && token) {
+    options.headers = options.headers || {};
+    if (!(options.headers instanceof Headers)) {
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      };
+    } else {
+      options.headers.set('Authorization', `Bearer ${token}`);
+    }
+  }
+  const response = await originalFetch(url, options);
+  if (typeof url === 'string' && url.includes('/api/') && (response.status === 401 || response.status === 403)) {
+    localStorage.removeItem('todo_token');
+    localStorage.removeItem('todo_user');
+    window.dispatchEvent(new Event('auth-failed'));
+  }
+  return response;
+};
 
 // --- LOCAL NATURAL LANGUAGE PROCESSING (NLP) QUICK ADD PARSER ---
 function parseNLPQuickAdd(inputTitle, lists, activeList) {
@@ -168,7 +193,24 @@ function App() {
       }, 60 * 60 * 1000);
     }
   });
+  const [token, setToken] = useState(() => localStorage.getItem('todo_token') || '');
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('todo_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
+  useEffect(() => {
+    const handleAuthFailed = () => {
+      setToken('');
+      setUser(null);
+    };
+    window.addEventListener('auth-failed', handleAuthFailed);
+    return () => window.removeEventListener('auth-failed', handleAuthFailed);
+  }, []);
   const [mainView, setMainView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -436,6 +478,11 @@ function App() {
   }, [tasks]);
 
   useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     Promise.all([fetchTasks(), fetchLists(), fetchSections()]).then(() => setLoading(false));
     
     // Fetch external events on app mount
@@ -498,7 +545,7 @@ function App() {
       document.documentElement.style.setProperty('--sidebar-bg', sidebarBg);
       document.documentElement.style.setProperty('--right-pane-bg', paneBg);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (mainView === 'calendar') {
@@ -592,9 +639,32 @@ function App() {
     }
   }
 
+  if (!token) {
+    return (
+      <LoginView 
+        onSuccess={(newToken, newUser) => {
+          localStorage.setItem('todo_token', newToken);
+          localStorage.setItem('todo_user', JSON.stringify(newUser));
+          setToken(newToken);
+          setUser(newUser);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="root-layout">
-      <GlobalSidebar mainView={mainView} setMainView={setMainView} />
+      <GlobalSidebar 
+        mainView={mainView} 
+        setMainView={setMainView} 
+        user={user}
+        onLogout={() => {
+          localStorage.removeItem('todo_token');
+          localStorage.removeItem('todo_user');
+          setToken('');
+          setUser(null);
+        }}
+      />
       
       <div className="app-container">
         {mainView === 'tasks' && (

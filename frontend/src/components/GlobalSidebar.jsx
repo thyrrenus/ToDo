@@ -1,6 +1,6 @@
-import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Settings } from 'lucide-react';
+import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Settings, LogOut } from 'lucide-react';
 
-export function GlobalSidebar({ mainView, setMainView }) {
+export function GlobalSidebar({ mainView, setMainView, onLogout, user }) {
   return (
     <nav className="global-sidebar">
       <button 
@@ -60,6 +60,18 @@ export function GlobalSidebar({ mainView, setMainView }) {
       >
         <Settings size={24} />
       </button>
+      {onLogout && (
+        <button 
+          className="global-nav-item"
+          onClick={onLogout}
+          title={`Cerrar sesión (${user?.username || 'Usuario'})`}
+          style={{ marginBottom: '0.5rem', color: 'var(--danger-color, #ef4444)', opacity: 0.8 }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+        >
+          <LogOut size={24} />
+        </button>
+      )}
     </nav>
   );
 }
