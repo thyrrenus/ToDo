@@ -194,6 +194,139 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
   };
 }
 
+function AddTaskWidget({ 
+  tasks, 
+  lists, 
+  activeList, 
+  quickAddTitle, 
+  setQuickAddTitle, 
+  handleQuickAdd, 
+  onToggleTask,
+  fetchTasks,
+  onSelectTask
+}) {
+  const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
+  const inboxListId = inboxList ? inboxList.id : null;
+
+  // Filter tasks
+  const todayTasks = tasks.filter(t => !t.is_completed && t.due_date && isToday(parseISO(t.due_date)));
+  const inboxTasks = tasks.filter(t => !t.is_completed && (t.list_id === null || t.list_id === inboxListId) && !(t.due_date && isToday(parseISO(t.due_date))));
+
+  const handleChipClick = (text) => {
+    setQuickAddTitle(prev => {
+      const trimmed = prev.trim();
+      return trimmed ? `${trimmed} ${text}` : text;
+    });
+    setTimeout(() => {
+      const input = document.getElementById('widget-quick-add-input');
+      if (input) input.focus();
+    }, 50);
+  };
+
+  const getPriorityColor = (prio) => {
+    if (prio === 3) return '#ef4444';
+    if (prio === 2) return '#3b82f6';
+    if (prio === 1) return '#f59e0b';
+    return 'var(--text-secondary)';
+  };
+
+  return (
+    <div className="add-task-widget">
+      <form onSubmit={handleQuickAdd} className="widget-quick-add-bar">
+        <Plus size={18} className="widget-quick-add-icon" />
+        <input 
+          id="widget-quick-add-input"
+          type="text" 
+          placeholder="Escribe una tarea (ej: Comprar pan mañana a las 8am !!!)" 
+          value={quickAddTitle}
+          onChange={e => setQuickAddTitle(e.target.value)}
+          autoFocus
+        />
+        <button type="submit" className="widget-quick-add-submit-btn">
+          Añadir
+        </button>
+      </form>
+
+      {/* NLP Helper Chips */}
+      <div className="nlp-chips-container">
+        <span className="nlp-chips-label">Atajos IA:</span>
+        <div className="nlp-chips-list">
+          <button type="button" className="nlp-chip chip-prio-3" onClick={() => handleChipClick('!!!')} title="Prioridad Alta">!!! Alta</button>
+          <button type="button" className="nlp-chip chip-prio-2" onClick={() => handleChipClick('!!')} title="Prioridad Media">!! Media</button>
+          <button type="button" className="nlp-chip chip-prio-1" onClick={() => handleChipClick('!')} title="Prioridad Baja">! Baja</button>
+          <button type="button" className="nlp-chip chip-date" onClick={() => handleChipClick('hoy')} title="Programar para Hoy">📅 hoy</button>
+          <button type="button" className="nlp-chip chip-date" onClick={() => handleChipClick('mañana')} title="Programar para Mañana">📅 mañana</button>
+          {lists.filter(l => l.name.toLowerCase() !== 'inbox').map(list => (
+            <button 
+              key={list.id}
+              type="button" 
+              className="nlp-chip chip-list" 
+              style={{ '--list-color': list.color || '#7c3aed' }}
+              onClick={() => handleChipClick(`#${list.name}`)}
+            >
+              #{list.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Daily checklist */}
+      <div className="widget-task-lists-container">
+        <div className="widget-task-section">
+          <h4 className="widget-task-section-title">⏰ Hoy ({todayTasks.length})</h4>
+          <div className="widget-tasks-list">
+            {todayTasks.length === 0 ? (
+              <div className="widget-empty-tasks">No tienes tareas para hoy. ¡Buen trabajo!</div>
+            ) : (
+              todayTasks.map(t => (
+                <div key={t.id} className="widget-task-item" onClick={() => onSelectTask(t.id)}>
+                  <div 
+                    className="widget-task-checkbox" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleTask(t.id, t.is_completed);
+                    }}
+                    style={{ borderColor: getPriorityColor(t.priority) }}
+                  />
+                  <span className="widget-task-title">{t.title}</span>
+                  {t.start_time && (
+                    <span className="widget-task-time">
+                      {format(parseISO(t.start_time), 'HH:mm')}
+                    </span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="widget-task-section">
+          <h4 className="widget-task-section-title">📥 Bandeja de Entrada ({inboxTasks.length})</h4>
+          <div className="widget-tasks-list">
+            {inboxTasks.length === 0 ? (
+              <div className="widget-empty-tasks">Bandeja de entrada vacía.</div>
+            ) : (
+              inboxTasks.map(t => (
+                <div key={t.id} className="widget-task-item" onClick={() => onSelectTask(t.id)}>
+                  <div 
+                    className="widget-task-checkbox" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleTask(t.id, t.is_completed);
+                    }}
+                    style={{ borderColor: getPriorityColor(t.priority) }}
+                  />
+                  <span className="widget-task-title">{t.title}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -206,6 +339,14 @@ function App() {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem('todo_token') || '');
+  const [isWidgetMode] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('widget') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('todo_user');
@@ -696,6 +837,110 @@ function App() {
           setUser(newUser);
         }}
       />
+    );
+  }
+
+  if (isWidgetMode) {
+    const getWidgetTitle = () => {
+      switch(mainView) {
+        case 'tasks': return '➕ Añadir Tarea';
+        case 'calendar': return '📅 Calendario';
+        case 'eisenhower': return '⚖️ Eisenhower';
+        case 'pomodoro': return '⏱️ Pomodoro';
+        case 'kanban': return '📋 Kanban';
+        default: return 'ToDo';
+      }
+    };
+
+    return (
+      <div className="widget-layout">
+        <header className="widget-header">
+          <div className="widget-title">
+            {getWidgetTitle()}
+          </div>
+          <button 
+            className="widget-full-app-btn" 
+            onClick={() => window.open(window.location.origin, '_blank')}
+            title="Abrir aplicación completa"
+          >
+            Abrir ToDo completo ↗
+          </button>
+        </header>
+        
+        <main className="widget-content">
+          {mainView === 'tasks' ? (
+            <AddTaskWidget 
+              tasks={tasks}
+              lists={lists}
+              activeList={activeList}
+              quickAddTitle={quickAddTitle}
+              setQuickAddTitle={setQuickAddTitle}
+              handleQuickAdd={handleQuickAdd}
+              onToggleTask={handleToggleTask}
+              fetchTasks={fetchTasks}
+              onSelectTask={(id) => {
+                setSelectedTaskId(id);
+                setSelectedSubtaskId(null);
+              }}
+            />
+          ) : mainView === 'calendar' ? (
+            <CalendarView 
+              tasks={tasks} 
+              lists={lists} 
+              externalEvents={externalEvents}
+              onSelectEvent={handleSelectEvent} 
+              onUpdateEvent={handleUpdateEventDates}
+            />
+          ) : mainView === 'pomodoro' ? (
+            <PomodoroView tasks={tasks} />
+          ) : mainView === 'eisenhower' ? (
+            <EisenhowerView 
+              tasks={tasks} 
+              onSelectTask={setSelectedTaskId} 
+              onUpdateTaskPriority={handleUpdateTaskPriority} 
+              onAddTaskInQuadrant={handleAddTaskInQuadrant}
+            />
+          ) : (
+            <KanbanView 
+              tasks={tasks}
+              lists={lists}
+              onSelectTask={setSelectedTaskId}
+              onUpdateTaskPriority={handleUpdateTaskPriority}
+              onUpdateTaskList={handleUpdateTaskList}
+              onAddTaskInQuadrant={handleAddTaskInQuadrant}
+            />
+          )}
+        </main>
+
+        {(selectedTask || selectedSubtask) && (
+          <div className="widget-modal-overlay" onClick={() => { setSelectedTaskId(null); setSelectedSubtaskId(null); }}>
+            <div className="widget-modal" onClick={e => e.stopPropagation()}>
+              <TaskDetail 
+                task={selectedTask}
+                subtask={selectedSubtask}
+                sections={sections}
+                onClose={() => {
+                  setSelectedTaskId(null);
+                  setSelectedSubtaskId(null);
+                }}
+                onUpdate={fetchTasks}
+                onDelete={handleDeleteTask}
+                onDeleteSubtask={async (id) => {
+                  try {
+                    const res = await fetch(`/api/subtasks/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                      setSelectedSubtaskId(null);
+                      fetchTasks();
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 

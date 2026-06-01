@@ -35,52 +35,59 @@ export default defineConfig({
         ],
         shortcuts: [
           {
-            name: 'Añadir Tarea',
-            short_name: 'Add Task',
-            description: 'Crear una nueva tarea rápidamente',
-            url: '/?view=tasks&action=new',
+            name: 'Widget: Añadir Tarea',
+            short_name: 'Widget: Add',
+            description: 'Crear una tarea rápidamente en una ventana compacta',
+            url: '/?widget=true&view=tasks',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           },
           {
-            name: 'Hoy',
-            short_name: 'Today',
+            name: 'Widget: Calendario',
+            short_name: 'Widget: Calendar',
+            description: 'Ver agenda en ventana compacta',
+            url: '/?widget=true&view=calendar',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Widget: Eisenhower',
+            short_name: 'Widget: Eisenhower',
+            description: 'Clasificar prioridades en ventana compacta',
+            url: '/?widget=true&view=eisenhower',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Widget: Pomodoro',
+            short_name: 'Widget: Pomo',
+            description: 'Temporizador Pomodoro compacto',
+            url: '/?widget=true&view=pomodoro',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Widget: Kanban',
+            short_name: 'Widget: Kanban',
+            description: 'Flujo Kanban compacto',
+            url: '/?widget=true&view=kanban',
+            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+          },
+          {
+            name: 'Hoy (Completo)',
+            short_name: 'Hoy',
             description: 'Ver mis tareas para hoy',
             url: '/?view=tasks&list=today',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           },
           {
-            name: 'Inbox',
+            name: 'Inbox (Completo)',
             short_name: 'Inbox',
             description: 'Ver bandeja de entrada',
             url: '/?view=tasks&list=inbox',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           },
           {
-            name: 'Calendario',
-            short_name: 'Calendar',
-            description: 'Ver calendario y agenda',
+            name: 'Calendario (Completo)',
+            short_name: 'Calendario',
+            description: 'Ver calendario principal',
             url: '/?view=calendar',
-            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
-          },
-          {
-            name: 'Enfoque Pomodoro',
-            short_name: 'Start Pomo',
-            description: 'Iniciar temporizador de enfoque',
-            url: '/?view=pomodoro',
-            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
-          },
-          {
-            name: 'Matriz de Eisenhower',
-            short_name: 'Eisenhower',
-            description: 'Clasificar prioridades',
-            url: '/?view=eisenhower',
-            icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
-          },
-          {
-            name: 'Tablero Kanban',
-            short_name: 'Kanban',
-            description: 'Ver flujo de trabajo',
-            url: '/?view=kanban',
             icons: [{ src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' }]
           }
         ]

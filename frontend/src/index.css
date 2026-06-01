@@ -1341,10 +1341,350 @@ input:checked + .slider:before {
   animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-.analytics-card {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 .analytics-card:hover {
   box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.4), 0 0 12px -3px rgba(124, 58, 237, 0.15) !important;
+}
+
+/* ==========================================================================
+   WIDGETS LAYOUT & INTERACTIVE DESIGNS
+   ========================================================================== */
+
+.widget-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  overflow: hidden;
+  font-family: var(--font-family);
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(10px);
+}
+
+.widget-title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.widget-full-app-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.widget-full-app-btn:hover {
+  background: var(--accent-hover);
+  color: #ffffff;
+  border-color: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.widget-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Add Task Widget Styles --- */
+.add-task-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+}
+
+.widget-quick-add-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.widget-quick-add-bar:focus-within {
+  border-color: var(--accent-hover);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.15);
+}
+
+.widget-quick-add-icon {
+  color: var(--text-secondary);
+}
+
+.widget-quick-add-bar input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.widget-quick-add-submit-btn {
+  background: var(--accent-hover);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.widget-quick-add-submit-btn:hover {
+  opacity: 0.9;
+}
+
+/* --- NLP Chips --- */
+.nlp-chips-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.nlp-chips-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.nlp-chips-list {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.nlp-chip {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nlp-chip:hover {
+  transform: translateY(-1px);
+  color: var(--text-primary);
+}
+
+.chip-prio-3 { border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
+.chip-prio-3:hover { background: rgba(239, 68, 68, 0.1); }
+.chip-prio-2 { border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; }
+.chip-prio-2:hover { background: rgba(59, 130, 246, 0.1); }
+.chip-prio-1 { border-color: rgba(245, 158, 11, 0.3); color: #f59e0b; }
+.chip-prio-1:hover { background: rgba(245, 158, 11, 0.1); }
+.chip-date { border-color: rgba(167, 139, 250, 0.3); color: #a78bfa; }
+.chip-date:hover { background: rgba(167, 139, 250, 0.1); }
+.chip-list { border-color: rgba(255, 255, 255, 0.1); color: var(--list-color); }
+.chip-list:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--list-color); }
+
+/* --- Checklist Tasks inside Widget --- */
+.widget-task-lists-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.widget-task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.widget-task-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding-bottom: 0.25rem;
+  letter-spacing: 0.02em;
+}
+
+.widget-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.widget-empty-tasks {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  padding: 0.5rem;
+  font-style: italic;
+}
+
+.widget-task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.widget-task-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateX(2px);
+}
+
+.widget-task-checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s;
+}
+
+.widget-task-checkbox:hover {
+  transform: scale(1.15);
+}
+
+.widget-task-title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.widget-task-time {
+  font-size: 0.7rem;
+  color: var(--accent-hover);
+  background: rgba(124, 58, 237, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* --- Widget Detail Modal --- */
+.widget-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.widget-modal {
+  width: 100%;
+  max-width: 360px;
+  max-height: 85vh;
+  background: var(--right-pane-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+}
+
+.widget-modal .task-detail {
+  width: 100% !important;
+  border-left: none !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================================
+   WIDGET RESPONSIVENESS & VIEWS ADAPTATION
+   ========================================================================== */
+
+/* Compact mode adaptions for specific views */
+.widget-layout .calendar-view {
+  padding: 0 !important;
+  height: 100%;
+}
+
+.widget-layout .calendar-header {
+  padding: 0.5rem 0 !important;
+}
+
+.widget-layout .calendar-header h2 {
+  font-size: 1rem !important;
+}
+
+.widget-layout .eisenhower-view-container {
+  padding: 0 !important;
+}
+
+.widget-layout .eisenhower-header {
+  display: none !important; /* Hide explanation to conserve space */
+}
+
+.widget-layout .eisenhower-grid {
+  grid-template-columns: 1fr !important; /* Stack columns on narrow widget scope */
+  grid-template-rows: repeat(4, auto) !important;
+  gap: 0.8rem !important;
+  min-height: auto !important;
+}
+
+.widget-layout .pomodoro-view {
+  padding: 0 !important;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.widget-layout .kanban-view-container {
+  padding: 0 !important;
+  height: 100%;
+}
+
+.widget-layout .kanban-lists-container {
+  flex-direction: column !important; /* Stack boards in widget Kanban view */
+  gap: 1rem !important;
+}
+
+.widget-layout .kanban-list {
+  width: 100% !important;
 }
