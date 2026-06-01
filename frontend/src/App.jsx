@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import { GlobalSidebar } from './components/GlobalSidebar';
 import { Sidebar } from './components/Sidebar';
 import { TaskItem } from './components/TaskItem';
@@ -157,6 +158,17 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
 }
 
 function App() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      r && setInterval(() => {
+        r.update();
+      }, 60 * 60 * 1000);
+    }
+  });
+
   const [mainView, setMainView] = useState('tasks'); // 'tasks' or 'calendar'
   const [tasks, setTasks] = useState([]);
   const [lists, setLists] = useState([]);
@@ -928,6 +940,60 @@ function App() {
               }}
             />
           </aside>
+        )}
+        {needRefresh && (
+          <div style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            backgroundColor: '#1c1c1e',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            zIndex: 99999,
+            maxWidth: '320px'
+          }}>
+            <p style={{ fontSize: '0.88rem', color: '#ffffff', margin: 0, fontWeight: 500, lineHeight: 1.4 }}>
+              ✨ ¡Hay una nueva versión disponible con mejoras y correcciones!
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => updateServiceWorker(true)}
+                style={{
+                  flex: 1,
+                  backgroundColor: 'var(--accent-hover, #7c3aed)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  transition: 'background-color 0.2s'
+                }}
+              >
+                Actualizar ahora
+              </button>
+              <button 
+                onClick={() => setNeedRefresh(false)}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  color: 'var(--text-secondary, #9e9e9e)',
+                  border: 'none',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem'
+                }}
+              >
+                Luego
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
