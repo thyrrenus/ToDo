@@ -17,8 +17,185 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
   const [pomodoroWork, setPomodoroWork] = useState(() => parseInt(localStorage.getItem('pomodoroWork') || '25'));
   const [pomodoroShort, setPomodoroShort] = useState(() => parseInt(localStorage.getItem('pomodoroShort') || '5'));
   const [pomodoroLong, setPomodoroLong] = useState(() => parseInt(localStorage.getItem('pomodoroLong') || '15'));
-  const [pomodoroSound, setPomodoroSound] = useState(() => localStorage.getItem('pomodoroSound') || 'bell');
   const [pomodoroVolume, setPomodoroVolume] = useState(() => parseFloat(localStorage.getItem('pomodoroVolume') || '0.5'));
+
+  const [selectedSound, setSelectedSound] = useState(() => localStorage.getItem('pomodoro_alarm_sound') || 'chime');
+  const [alarmRepeatCount, setAlarmRepeatCount] = useState(() => parseInt(localStorage.getItem('pomodoro_alarm_repeat_count') || '1'));
+
+  const [selectedVoiceName, setSelectedVoiceName] = useState(() => localStorage.getItem('agenda_voice_name') || '');
+  const [availableSpanishVoices, setAvailableSpanishVoices] = useState([]);
+
+  useEffect(() => {
+    const updateVoices = () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const allVoices = window.speechSynthesis.getVoices();
+        const spanishVoices = allVoices.filter(v => 
+          v.lang.toLowerCase().includes('es') || 
+          v.lang.toLowerCase().startsWith('es-')
+        );
+        const finalVoicesList = spanishVoices.length > 0 ? spanishVoices : allVoices;
+        setAvailableSpanishVoices(finalVoicesList);
+
+        if (!localStorage.getItem('agenda_voice_name') && finalVoicesList.length > 0) {
+          const preferredDefault = finalVoicesList.find(v => v.lang.startsWith('es-ES') || v.lang.startsWith('es-')) || finalVoicesList[0];
+          if (preferredDefault) {
+            setSelectedVoiceName(preferredDefault.name);
+          }
+        }
+      }
+    };
+
+    updateVoices();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  const previewVoice = (voiceName) => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance("¡Hola! Así sonará tu agenda diaria de hoy. ¿Te gusta esta voz?");
+      utterance.lang = 'es-ES';
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(v => v.name === voiceName);
+      if (voice) {
+        utterance.voice = voice;
+      }
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Native Web Audio API Synthesizer Sound Library
+  const soundLibrary = {
+    chime: {
+      name: '🔔 Campana Digital',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const playNote = (freq, delay, duration) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(destination);
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+          gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + delay + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+          osc.start(audioCtx.currentTime + delay);
+          osc.stop(audioCtx.currentTime + delay + duration);
+        };
+        playNote(523.25, 0, 0.4);
+        playNote(659.25, 0.15, 0.6);
+        playNote(783.99, 0.3, 0.8);
+      }
+    },
+    zen: {
+      name: '🧘 Cuenco Tibetano',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(destination);
+        osc1.frequency.value = 220;
+        osc1.type = 'sine';
+        osc2.frequency.value = 220.5;
+        osc2.type = 'sine';
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+        osc1.start(audioCtx.currentTime);
+        osc2.start(audioCtx.currentTime);
+        osc1.stop(audioCtx.currentTime + 2.5);
+        osc2.stop(audioCtx.currentTime + 2.5);
+      }
+    },
+    digital: {
+      name: '⏰ Alarma Retro',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const playBeep = (freq, start, duration) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(destination);
+          osc.frequency.value = freq;
+          osc.type = 'square';
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + start);
+          gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + start + 0.01);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime + start + duration - 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + start + duration);
+          osc.start(audioCtx.currentTime + start);
+          osc.stop(audioCtx.currentTime + start + duration);
+        };
+        playBeep(880, 0, 0.1);
+        playBeep(880, 0.15, 0.1);
+        playBeep(880, 0.3, 0.2);
+      }
+    },
+    piano: {
+      name: '🎹 Acorde de Piano',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const notes = [261.63, 329.63, 392.00, 523.25];
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(destination);
+          osc.frequency.value = freq;
+          osc.type = 'triangle';
+          const noteDelay = idx * 0.04;
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + noteDelay);
+          gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + noteDelay + 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + noteDelay + 1.2);
+          osc.start(audioCtx.currentTime + noteDelay);
+          osc.stop(audioCtx.currentTime + noteDelay + 1.2);
+        });
+      }
+    }
+  };
+
+  const playSound = (soundKey = selectedSound) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const soundObj = soundLibrary[soundKey];
+      if (soundObj) {
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(pomodoroVolume, audioCtx.currentTime);
+        masterGain.connect(audioCtx.destination);
+        soundObj.play(audioCtx, masterGain);
+      }
+    } catch (e) {
+      console.error('AudioContext error:', e);
+    }
+  };
+
+  const handleSelectSound = (soundKey) => {
+    setSelectedSound(soundKey);
+    localStorage.setItem('pomodoro_alarm_sound', soundKey);
+    // Preview the sound automatically on select
+    setTimeout(() => {
+      playSound(soundKey);
+    }, 50);
+  };
+
+  const handleTestSoundWithRepeat = () => {
+    let currentPlay = 0;
+    const playLoop = () => {
+      playSound(selectedSound);
+      currentPlay++;
+      if (currentPlay < alarmRepeatCount) {
+        setTimeout(playLoop, 1500);
+      }
+    };
+    playLoop();
+  };
 
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('appAccentColor') || '#7c3aed');
   const [bgStyle, setBgStyle] = useState(() => localStorage.getItem('appBgStyle') || '#121212');
@@ -128,8 +305,9 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
     localStorage.setItem('pomodoroWork', pomodoroWork.toString());
     localStorage.setItem('pomodoroShort', pomodoroShort.toString());
     localStorage.setItem('pomodoroLong', pomodoroLong.toString());
-    localStorage.setItem('pomodoroSound', pomodoroSound);
     localStorage.setItem('pomodoroVolume', pomodoroVolume.toString());
+    localStorage.setItem('pomodoro_alarm_sound', selectedSound);
+    localStorage.setItem('pomodoro_alarm_repeat_count', alarmRepeatCount.toString());
     localStorage.setItem('appAccentColor', accentColor);
     localStorage.setItem('appBgStyle', bgStyle);
     if (user) {
@@ -141,6 +319,7 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
     localStorage.setItem('enableTaskAlerts', enableTaskAlerts ? 'true' : 'false');
     localStorage.setItem('enablePomodoroAlerts', enablePomodoroAlerts ? 'true' : 'false');
     localStorage.setItem('aiModelSelected', aiModelSelected);
+    localStorage.setItem('agenda_voice_name', selectedVoiceName);
 
 
     setSaveSuccess(true);
@@ -421,9 +600,62 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
           {/* Sound selection */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '0.8rem', color: isLightTheme ? '#4b5563' : '#a1a1aa', fontWeight: 600 }}>Tono de Alerta Final:</label>
-            <select
-              value={pomodoroSound}
-              onChange={(e) => setPomodoroSound(e.target.value)}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select
+                value={selectedSound}
+                onChange={(e) => handleSelectSound(e.target.value)}
+                style={{
+                  flex: 1,
+                  background: isLightTheme ? '#ffffff' : '#1a1a1a',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {Object.entries(soundLibrary).map(([key, sound]) => (
+                  <option key={key} value={key} style={{ background: isLightTheme ? '#ffffff' : '#1a1a1a' }}>
+                    {sound.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleTestSoundWithRepeat}
+                style={{
+                  background: 'var(--accent-hover)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                title="Probar sonido con repeticiones"
+              >
+                🔊 Probar
+              </button>
+            </div>
+          </div>
+
+          {/* Repetitions Input */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.8rem', color: isLightTheme ? '#4b5563' : '#a1a1aa', fontWeight: 600 }}>Repetir Alerta (veces):</label>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={alarmRepeatCount}
+              onChange={(e) => setAlarmRepeatCount(Math.max(1, parseInt(e.target.value) || 1))}
               style={{
                 background: isLightTheme ? '#ffffff' : '#1a1a1a',
                 border: '1px solid var(--border-color)',
@@ -431,13 +663,11 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
                 padding: '8px 12px',
                 color: 'var(--text-primary)',
                 fontSize: '0.85rem',
-                cursor: 'pointer'
+                outline: 'none',
+                width: '100%',
+                boxSizing: 'border-box'
               }}
-            >
-              <option value="bell">🛎️ Soft Bell (Campana Sintetizada)</option>
-              <option value="beep">🚨 Alarm Beep (Pitido Digital)</option>
-              <option value="synth">🎵 Ambient Melody (Arpegio Synth)</option>
-            </select>
+            />
           </div>
 
           {/* Volume slider */}
@@ -459,6 +689,78 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
                 cursor: 'pointer'
               }}
             />
+          </div>
+
+          {/* Separator line */}
+          <div style={{ 
+            height: '1px', 
+            background: isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)',
+            margin: '0.5rem 0'
+          }} />
+
+          {/* Voice selector for Agenda */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.8rem', color: isLightTheme ? '#4b5563' : '#a1a1aa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              🎙️ Voz de Agenda Diaria:
+            </label>
+            <p style={{ fontSize: '0.7rem', color: isLightTheme ? '#6b7280' : '#71717a', lineHeight: 1.35 }}>
+              Selecciona la voz del sistema para la lectura natural de tu agenda diaria en la sección "Hoy".
+            </p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <select
+                value={selectedVoiceName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedVoiceName(val);
+                  previewVoice(val);
+                }}
+                style={{
+                  flex: 1,
+                  background: isLightTheme ? '#ffffff' : '#1a1a1a',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                {availableSpanishVoices.length === 0 ? (
+                  <option value="">No se encontraron voces en el sistema</option>
+                ) : (
+                  availableSpanishVoices.map((voice) => (
+                    <option key={voice.name} value={voice.name}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))
+                )}
+              </select>
+              <button
+                type="button"
+                onClick={() => previewVoice(selectedVoiceName)}
+                disabled={!selectedVoiceName}
+                style={{
+                  background: 'var(--accent-hover)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: selectedVoiceName ? 1 : 0.5
+                }}
+                onMouseEnter={(e) => { if(selectedVoiceName) e.currentTarget.style.opacity = '0.9'; }}
+                onMouseLeave={(e) => { if(selectedVoiceName) e.currentTarget.style.opacity = '1'; }}
+              >
+                🔊 Probar Voz
+              </button>
+            </div>
           </div>
         </div>
 

@@ -15,7 +15,8 @@ import { LoginView } from './components/LoginView';
 import { ProjectKanbanView } from './components/ProjectKanbanView';
 import { SectionHeader } from './components/SectionHeader';
 import { AdminView } from './components/AdminView';
-import { Inbox, Plus } from 'lucide-react';
+import { SharedTasksView } from './components/SharedTasksView';
+import { Inbox, Plus, Mic } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from './utils/notifications';
 
@@ -87,6 +88,7 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
   }
 
   // 2. Extract list hashtags (e.g. #Trabajo, #Personal)
+  let unmatchedHashtag = null;
   const hashtagRegex = /#(\w+)/g;
   let match;
   while ((match = hashtagRegex.exec(title)) !== null) {
@@ -94,6 +96,9 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     const matchedList = lists.find(l => l.name.toLowerCase() === hashtag.toLowerCase());
     if (matchedList) {
       list_id = matchedList.id;
+      title = title.replace(`#${hashtag}`, '');
+    } else {
+      unmatchedHashtag = hashtag;
       title = title.replace(`#${hashtag}`, '');
     }
   }
@@ -190,7 +195,8 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     priority,
     due_date,
     start_time,
-    end_time
+    end_time,
+    unmatchedHashtag
   };
 }
 
@@ -203,7 +209,10 @@ function AddTaskWidget({
   handleQuickAdd, 
   onToggleTask,
   fetchTasks,
-  onSelectTask
+  onSelectTask,
+  isListening,
+  listeningSource,
+  startSpeechRecognition
 }) {
   const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
   const inboxListId = inboxList ? inboxList.id : null;
@@ -232,7 +241,7 @@ function AddTaskWidget({
 
   return (
     <div className="add-task-widget">
-      <form onSubmit={handleQuickAdd} className="widget-quick-add-bar">
+      <form onSubmit={handleQuickAdd} className="widget-quick-add-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <Plus size={18} className="widget-quick-add-icon" />
         <input 
           id="widget-quick-add-input"
@@ -241,8 +250,40 @@ function AddTaskWidget({
           value={quickAddTitle}
           onChange={e => setQuickAddTitle(e.target.value)}
           autoFocus
+          style={{ flex: 1 }}
         />
-        <button type="submit" className="widget-quick-add-submit-btn">
+        {/* Microphone Button */}
+        <button
+          type="button"
+          onClick={() => startSpeechRecognition('widget')}
+          className={`mic-button ${isListening && listeningSource === 'widget' ? 'listening' : ''}`}
+          style={{
+            background: isListening && listeningSource === 'widget' ? 'var(--danger-color)' : 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '50%',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: isListening && listeningSource === 'widget' ? '#ffffff' : 'var(--text-primary)',
+            cursor: 'pointer',
+            transition: 'all 0.25s ease',
+            flexShrink: 0
+          }}
+          title={isListening && listeningSource === 'widget' ? "Detener grabación de voz" : "Añadir tarea por voz"}
+        >
+          {isListening && listeningSource === 'widget' ? (
+            <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+              <span className="voice-bar"></span>
+              <span className="voice-bar"></span>
+              <span className="voice-bar"></span>
+            </div>
+          ) : (
+            <Mic size={14} />
+          )}
+        </button>
+        <button type="submit" className="widget-quick-add-submit-btn" style={{ flexShrink: 0 }}>
           Añadir
         </button>
       </form>
@@ -393,6 +434,245 @@ function App() {
   const [selectedSubtaskId, setSelectedSubtaskId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quickAddTitle, setQuickAddTitle] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [listeningSource, setListeningSource] = useState('');
+  const [isReadingAgenda, setIsReadingAgenda] = useState(false);
+
+  const startSpeechRecognition = (source) => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('La transcripción de voz no está soportada en este navegador. Intenta con Google Chrome o Microsoft Edge.');
+      return;
+    }
+
+    if (isListening) {
+      if (window.activeRecognition) {
+        window.activeRecognition.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'es-ES';
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setListeningSource(source);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          alert('Permiso de micrófono denegado. Por favor, habilita el micrófono en la configuración de tu navegador.');
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        window.activeRecognition = null;
+      };
+
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        let currentText = finalTranscript || interimTranscript;
+
+        // 1. Detección del comando de auto-guardado manos libres al final del dictado
+        let shouldAutoSubmit = false;
+        if (event.results[event.results.length - 1].isFinal) {
+          const lowerText = currentText.toLowerCase().trim();
+          if (lowerText.endsWith('y listo') || lowerText.endsWith('guardar')) {
+            shouldAutoSubmit = true;
+            // Quitar el comando del texto final
+            currentText = currentText
+              .replace(/\s+(?:y listo|guardar)$/i, '')
+              .replace(/^(?:y listo|guardar)$/i, '');
+          }
+        }
+
+        // 2. Formatear automáticamente palabras habladas en símbolos (hashtag/almohadilla/gato/etiqueta -> #, exclamación -> !)
+        currentText = currentText
+          .replace(/(?:hashtag|hastag|hasthtag|almohadilla|gato|etiqueta)\s+(\w+)/gi, '#$1')
+          .replace(/\s*(?:tres exclamaciones|tres signos de exclamación|tres admiraciones|tres signos de admiración)/gi, ' !!!')
+          .replace(/\s*(?:dos exclamaciones|dos signos de exclamación|dos admiraciones|dos signos de admiración)/gi, ' !!')
+          .replace(/\s*(?:una exclamación|signo de exclamación|una admiración|signo de admiración)/gi, ' !');
+
+        // 3. Mapear cuadrantes de Eisenhower por nombre hablado
+        currentText = currentText
+          .replace(/\s*(?:urgente e importante|prioridad alta|cuadrante uno|cuadrante 1)/gi, ' !!!')
+          .replace(/\s*(?:importante no urgente|importante pero no urgente|prioridad media|cuadrante dos|cuadrante 2)/gi, ' !!')
+          .replace(/\s*(?:urgente no importante|urgente pero no importante|prioridad baja|cuadrante tres|cuadrante 3)/gi, ' !')
+          .replace(/\s*(?:no urgente no importante|no urgente y no importante|prioridad ninguna|cuadrante cuatro|cuadrante 4)/gi, ' ');
+
+        // 4. Mapear atajos rápidos de fecha relativa hablados
+        currentText = currentText
+          .replace(/\s*(?:esta tarde)/gi, ' hoy a las 6 pm')
+          .replace(/\s*(?:esta noche)/gi, ' hoy a las 9 pm')
+          .replace(/\s*(?:fin de semana|el fin de semana)/gi, ' sábado');
+
+        setQuickAddTitle(currentText);
+
+        if (shouldAutoSubmit) {
+          if (window.activeRecognition) {
+            window.activeRecognition.stop();
+          }
+          setIsListening(false);
+          
+          // Guardar de inmediato usando la función con anulación directa de estado
+          setTimeout(() => {
+            handleQuickAdd(null, currentText);
+          }, 100);
+        }
+      };
+
+      window.activeRecognition = recognition;
+      recognition.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
+
+  const generateSpeechScript = (userName, todayTasks) => {
+    const pending = todayTasks.filter(t => !t.is_completed);
+    const completed = todayTasks.filter(t => t.is_completed);
+
+    const hours = new Date().getHours();
+    let greeting = '¡Hola!';
+    if (hours < 12) greeting = '¡Buenos días!';
+    else if (hours < 19) greeting = '¡Buenas tardes!';
+    else greeting = '¡Buenas noches!';
+
+    const namePhrase = userName ? `, ${userName}` : '';
+    let script = `${greeting}${namePhrase}. `;
+
+    if (todayTasks.length === 0) {
+      script += 'Hoy tienes el día completamente despejado de tareas en tu agenda. Es una excelente oportunidad para descansar, reflexionar o planificar tus próximos pasos con tranquilidad. ¡Disfruta de tu día!';
+      return script;
+    }
+
+    if (completed.length > 0) {
+      if (completed.length === 1) {
+        script += `¡Buen trabajo! Ya has completado tu primera tarea de hoy: "${completed[0].title}". `;
+      } else {
+        script += `¡Fabuloso! Hoy ya has completado ${completed.length} tareas: ${completed.map(t => `"${t.title}"`).join(', y ')}. Sigue con ese gran ritmo. `;
+      }
+    }
+
+    if (pending.length === 0) {
+      if (completed.length > 0) {
+        script += '¡Y lo mejor de todo es que no te queda ninguna tarea pendiente para el resto del día! Has completado todo lo programado. ¡Muchas felicidades!';
+      } else {
+        script += 'No tienes ninguna tarea pendiente programada para hoy. ¡Qué gran día para relajarse!';
+      }
+    } else {
+      script += `Para lo que queda del día, tienes ${pending.length} ${pending.length === 1 ? 'actividad pendiente' : 'actividades pendientes'} por realizar. `;
+
+      const sortedPending = [...pending].sort((a, b) => {
+        if (a.start_time && b.start_time) return new Date(a.start_time) - new Date(b.start_time);
+        if (a.start_time) return -1;
+        if (b.start_time) return 1;
+        return b.priority - a.priority;
+      });
+
+      script += 'Aquí tienes tu plan: ';
+
+      sortedPending.forEach((task, idx) => {
+        let taskPhrase = '';
+        if (idx === 0) {
+          taskPhrase = 'Primero, ';
+        } else if (idx === sortedPending.length - 1 && sortedPending.length > 1) {
+          taskPhrase = 'Y por último, ';
+        } else {
+          taskPhrase = 'Luego, ';
+        }
+
+        taskPhrase += `debes "${task.title}". `;
+
+        if (task.start_time) {
+          const timeStr = format(parseISO(task.start_time), 'HH:mm');
+          taskPhrase = taskPhrase.replace('". ', `", programada a las ${timeStr}. `);
+        }
+
+        if (task.priority === 3) {
+          taskPhrase += 'Esta actividad es de prioridad urgente e importante, por lo que te recomiendo enfocar toda tu energía en ella cuanto antes. ';
+        } else if (task.priority === 2) {
+          taskPhrase += 'Esta es una tarea importante que requiere buena atención. ';
+        }
+
+        script += taskPhrase;
+      });
+
+      script += '¡Mucho éxito con tu agenda de hoy, estoy seguro de que lograrás todo lo que te propongas!';
+    }
+
+    return script;
+  };
+
+  const handleReadAgendaAloud = () => {
+    if (isReadingAgenda) {
+      window.speechSynthesis.cancel();
+      setIsReadingAgenda(false);
+      return;
+    }
+
+    const todayTasks = tasks.filter(t => t.due_date && isToday(parseISO(t.due_date)));
+    const userNameStr = localStorage.getItem('userName') || 'Carlos';
+    const script = generateSpeechScript(userNameStr, todayTasks);
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(script);
+      utterance.lang = 'es-ES';
+
+      const voices = window.speechSynthesis.getVoices();
+      const savedVoiceName = localStorage.getItem('agenda_voice_name');
+      let selectedVoice = null;
+      if (savedVoiceName) {
+        selectedVoice = voices.find(v => v.name === savedVoiceName);
+      }
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.startsWith('es-')) || voices[0];
+      }
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.rate = 1.02;
+      utterance.pitch = 1.0;
+
+      utterance.onstart = () => {
+        setIsReadingAgenda(true);
+      };
+
+      utterance.onend = () => {
+        setIsReadingAgenda(false);
+      };
+
+      utterance.onerror = () => {
+        setIsReadingAgenda(false);
+      };
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.error('SpeechSynthesis error:', e);
+      setIsReadingAgenda(false);
+    }
+  };
   const [activeDragSectionId, setActiveDragSectionId] = useState(null);
   const [projectLayout, setProjectLayout] = useState('list'); // 'list' or 'kanban'
   const [externalEvents, setExternalEvents] = useState([]);
@@ -769,18 +1049,49 @@ function App() {
     }
   };
 
-  const handleQuickAdd = async (e) => {
-    e.preventDefault();
-    if (!quickAddTitle.trim()) return;
+  const handleQuickAdd = async (e, overrideTitle) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const titleToUse = typeof overrideTitle === 'string' ? overrideTitle : quickAddTitle;
+    if (!titleToUse.trim()) return;
 
     // Ejecutar el motor local NLP para autocompletar propiedades
-    const parsedTaskData = parseNLPQuickAdd(quickAddTitle, lists, activeList);
+    const parsedTaskData = parseNLPQuickAdd(titleToUse, lists, activeList);
+    let finalTaskData = { ...parsedTaskData };
+
+    if (parsedTaskData.unmatchedHashtag) {
+      try {
+        const listName = parsedTaskData.unmatchedHashtag;
+        const colorPalette = ['#7c3aed', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+        const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+
+        const listRes = await fetch('/api/lists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: listName.charAt(0).toUpperCase() + listName.slice(1),
+            color: randomColor
+          })
+        });
+
+        if (listRes.ok) {
+          const newList = await listRes.json();
+          if (newList && newList.id) {
+            finalTaskData.list_id = newList.id;
+          }
+          await fetchLists();
+        }
+      } catch (err) {
+        console.error('Error auto-creating list:', err);
+      }
+    }
+
+    delete finalTaskData.unmatchedHashtag;
 
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsedTaskData)
+        body: JSON.stringify(finalTaskData)
       });
       if (res.ok) {
         setQuickAddTitle('');
@@ -882,6 +1193,9 @@ function App() {
                 setSelectedTaskId(id);
                 setSelectedSubtaskId(null);
               }}
+              isListening={isListening}
+              listeningSource={listeningSource}
+              startSpeechRecognition={startSpeechRecognition}
             />
           ) : mainView === 'calendar' ? (
             <CalendarView 
@@ -967,7 +1281,45 @@ function App() {
           {mainView === 'tasks' ? (
             <>
               <header className="header ticktick-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
-                <h1 style={{ marginBottom: 0 }}>{getHeaderTitle()}</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <h1 style={{ marginBottom: 0 }}>{getHeaderTitle()}</h1>
+                  
+                  {activeList === 'today' && (
+                    <button
+                      onClick={handleReadAgendaAloud}
+                      className={`agenda-voice-reader-btn ${isReadingAgenda ? 'reading' : ''}`}
+                      style={{
+                        background: isReadingAgenda ? 'rgba(239, 68, 68, 0.1)' : 'rgba(124, 58, 237, 0.1)',
+                        border: isReadingAgenda ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(124, 58, 237, 0.25)',
+                        borderRadius: '20px',
+                        padding: '6px 14px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: isReadingAgenda ? 'var(--danger-color)' : 'var(--accent-hover)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: isReadingAgenda ? '0 2px 8px rgba(239, 68, 68, 0.1)' : '0 2px 8px rgba(124, 58, 237, 0.1)'
+                      }}
+                      title={isReadingAgenda ? "Detener lectura" : "Escuchar resumen de mi agenda de hoy"}
+                    >
+                      {isReadingAgenda ? (
+                        <>
+                          <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.1s' }}></span>
+                          <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.3s', height: '14px' }}></span>
+                          <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.2s' }}></span>
+                          <span>Detener Lectura</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🔊 Escuchar Agenda</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
                 
                 {typeof activeList === 'number' && (
                   <div style={{
@@ -1020,14 +1372,49 @@ function App() {
                 )}
               </header>
 
-              <form className="quick-add-bar" onSubmit={handleQuickAdd}>
+              <form className="quick-add-bar" onSubmit={handleQuickAdd} style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
                 <Plus size={18} className="quick-add-icon" />
                 <input 
                   type="text" 
                   placeholder="Add Task" 
                   value={quickAddTitle}
                   onChange={e => setQuickAddTitle(e.target.value)}
+                  style={{ flex: 1 }}
                 />
+                
+                {/* Microphone Button */}
+                <button
+                  type="button"
+                  onClick={() => startSpeechRecognition('main')}
+                  className={`mic-button ${isListening && listeningSource === 'main' ? 'listening' : ''}`}
+                  style={{
+                    background: isListening && listeningSource === 'main' ? 'var(--danger-color)' : 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: isListening && listeningSource === 'main' ? '#ffffff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.25s ease',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    flexShrink: 0
+                  }}
+                  title={isListening && listeningSource === 'main' ? "Detener grabación de voz" : "Añadir tarea por voz"}
+                >
+                  {isListening && listeningSource === 'main' ? (
+                    <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                      <span className="voice-bar"></span>
+                      <span className="voice-bar"></span>
+                      <span className="voice-bar"></span>
+                    </div>
+                  ) : (
+                    <Mic size={16} />
+                  )}
+                </button>
               </form>
 
               {loading ? (
@@ -1281,6 +1668,11 @@ function App() {
             />
           ) : mainView === 'admin' ? (
             <AdminView />
+          ) : mainView === 'shared' ? (
+            <SharedTasksView 
+              user={user}
+              onRefreshTasks={fetchTasks}
+            />
           ) : (
             <AnalyticsView 
               tasks={tasks}

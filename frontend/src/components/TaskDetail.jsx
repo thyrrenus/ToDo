@@ -729,12 +729,39 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
                 </div>
               </div>
             ) : (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.8 }}>
-                {task.priority === 3 ? '🔴 Urgente e Importante (Hacer ya)' :
-                 task.priority === 2 ? '🟡 Importante pero No Urgente (Agendar)' :
-                 task.priority === 1 ? '🔵 Urgente pero No Importante (Delegar)' :
-                 '⚪ No Urgente y No Importante (Eliminar)'}
-              </span>
+              <select
+                value={task.priority}
+                onChange={async (e) => {
+                  const priorityVal = parseInt(e.target.value, 10);
+                  try {
+                    await fetch(`/api/tasks/${task.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ priority: priorityVal })
+                    });
+                    onUpdate();
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  width: '100%',
+                  marginTop: '2px'
+                }}
+              >
+                <option value="3" style={{ background: 'var(--right-pane-bg)' }}>🔴 Urgente e Importante (Hacer ya)</option>
+                <option value="2" style={{ background: 'var(--right-pane-bg)' }}>🟡 Importante pero No Urgente (Agendar)</option>
+                <option value="1" style={{ background: 'var(--right-pane-bg)' }}>🔵 Urgente pero No Importante (Delegar)</option>
+                <option value="0" style={{ background: 'var(--right-pane-bg)' }}>⚪ No Urgente y No Importante (Eliminar)</option>
+              </select>
             )}
           </div>
         )}

@@ -275,13 +275,25 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { list_id, section_id, title, description, due_date, start_time, end_time, priority } = req.body;
+  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to } = req.body;
   try {
     const info = await db.prepare(`
-      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(list_id, section_id || null, title, description, due_date, start_time || null, end_time || null, priority || 0, req.user.id);
-    const newTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
+      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      list_id || null, 
+      section_id || null, 
+      title, 
+      description || null, 
+      due_date || null, 
+      start_time || null, 
+      end_time || null, 
+      priority || 0, 
+      req.user.id, 
+      team_id || null, 
+      assigned_to || null
+    );
+    const newTask = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(info.lastInsertRowid);
     res.json(newTask);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -289,18 +301,30 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
-  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id } = req.body;
+  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to } = req.body;
   const { id } = req.params;
   try {
-    const current = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const current = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
     if (!current) {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+    // Check authorization: creator, direct assignee, or member of assigned team
+    let isAuthorized = current.user_id === req.user.id || current.assigned_to === req.user.id;
+    if (!isAuthorized && current.team_id) {
+      const isTeamMember = await db.prepare('SELECT id FROM team_members WHERE team_id = ? AND user_id = ?')
+        .get(current.team_id, req.user.id);
+      if (isTeamMember) isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'No tienes permiso para actualizar esta tarea.' });
+    }
+
     await db.prepare(`
       UPDATE tasks 
-      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ? 
-      WHERE id = ? AND user_id = ?
+      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, team_id = ?, assigned_to = ? 
+      WHERE id = ?
     `).run(
       list_id !== undefined ? list_id : current.list_id,
       section_id !== undefined ? section_id : current.section_id,
@@ -311,11 +335,12 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       end_time !== undefined ? end_time : current.end_time,
       priority !== undefined ? priority : current.priority,
       is_completed !== undefined ? is_completed : current.is_completed,
-      id,
-      req.user.id
+      team_id !== undefined ? team_id : current.team_id,
+      assigned_to !== undefined ? assigned_to : current.assigned_to,
+      id
     );
 
-    const updatedTask = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const updatedTask = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
     res.json(updatedTask);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -325,12 +350,15 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
 app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
-    const current = await db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const current = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
     if (!current) {
       return res.status(404).json({ error: 'Task not found' });
     }
+    if (current.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Solo el creador de la tarea puede eliminarla' });
+    }
     await db.prepare('DELETE FROM subtasks WHERE task_id = ?').run(id);
-    await db.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').run(id, req.user.id);
+    await db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -579,6 +607,208 @@ app.get('/api/external-events', async (req, res) => {
   } catch (err) {
     console.error('Error in external-events proxy:', err.message);
     res.status(500).json({ error: `No se pudo obtener o procesar el calendario: ${err.message}` });
+  }
+});
+
+// --- COLLABORATION: USERS, FRIENDS, TEAMS & SHARED TASKS ---
+
+// 1. Get all users for discovery
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await db.prepare('SELECT id, username, email FROM users WHERE id != ?').all(req.user.id);
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Get friends list
+app.get('/api/friends', authenticateToken, async (req, res) => {
+  try {
+    const friends = await db.prepare(`
+      SELECT f.id, u.id as friend_id, u.username, u.email
+      FROM friends f
+      JOIN users u ON f.friend_id = u.id
+      WHERE f.user_id = ?
+    `).all(req.user.id);
+    res.json(friends);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Add a friend
+app.post('/api/friends', authenticateToken, async (req, res) => {
+  const { friend_id } = req.body;
+  if (!friend_id) return res.status(400).json({ error: 'Falta friend_id' });
+  try {
+    const existing = await db.prepare('SELECT id FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, friend_id);
+    if (existing) return res.status(400).json({ error: 'Ya son amigos' });
+
+    await db.prepare('INSERT INTO friends (user_id, friend_id) VALUES (?, ?)').run(req.user.id, friend_id);
+    await db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)').run(friend_id, req.user.id);
+
+    const friend = await db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(friend_id);
+    res.json({ success: true, friend });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Remove a friend
+app.delete('/api/friends/:friendId', authenticateToken, async (req, res) => {
+  const { friendId } = req.params;
+  try {
+    await db.prepare('DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)')
+      .run(req.user.id, friendId, friendId, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Get teams list
+app.get('/api/teams', authenticateToken, async (req, res) => {
+  try {
+    const teams = await db.prepare(`
+      SELECT t.id, t.name, t.created_by, t.created_at, u.username as creator_name
+      FROM teams t
+      JOIN users u ON t.created_by = u.id
+      WHERE t.id IN (SELECT team_id FROM team_members WHERE user_id = ?)
+    `).all(req.user.id);
+
+    const teamsWithMembers = await Promise.all(teams.map(async (team) => {
+      const members = await db.prepare(`
+        SELECT u.id, u.username, u.email
+        FROM team_members tm
+        JOIN users u ON tm.user_id = u.id
+        WHERE tm.team_id = ?
+      `).all(team.id);
+      team.members = members;
+      return team;
+    }));
+
+    res.json(teamsWithMembers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Create a team
+app.post('/api/teams', authenticateToken, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre de equipo requerido' });
+  try {
+    const info = await db.prepare('INSERT INTO teams (name, created_by) VALUES (?, ?)').run(name.trim(), req.user.id);
+    const teamId = info.lastInsertRowid;
+    await db.prepare('INSERT INTO team_members (team_id, user_id) VALUES (?, ?)').run(teamId, req.user.id);
+
+    const newTeam = await db.prepare(`
+      SELECT t.id, t.name, t.created_by, t.created_at, u.username as creator_name
+      FROM teams t
+      JOIN users u ON t.created_by = u.id
+      WHERE t.id = ?
+    `).get(teamId);
+    
+    newTeam.members = [{ id: req.user.id, username: req.user.username, email: req.user.email }];
+    res.json(newTeam);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Add team member
+app.post('/api/teams/:id/members', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { user_id } = req.body;
+  if (!user_id) return res.status(400).json({ error: 'Falta user_id' });
+  try {
+    const team = await db.prepare('SELECT * FROM teams WHERE id = ?').get(id);
+    if (!team) return res.status(404).json({ error: 'Equipo no encontrado' });
+    if (team.created_by !== req.user.id) {
+      return res.status(403).json({ error: 'Solo el creador del equipo puede añadir miembros' });
+    }
+
+    const existing = await db.prepare('SELECT id FROM team_members WHERE team_id = ? AND user_id = ?').get(id, user_id);
+    if (existing) return res.status(400).json({ error: 'El usuario ya es miembro de este equipo' });
+
+    await db.prepare('INSERT INTO team_members (team_id, user_id) VALUES (?, ?)').run(id, user_id);
+    
+    const newMember = await db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(user_id);
+    res.json(newMember);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Remove team member
+app.delete('/api/teams/:id/members/:userId', authenticateToken, async (req, res) => {
+  const { id, userId } = req.params;
+  try {
+    const team = await db.prepare('SELECT * FROM teams WHERE id = ?').get(id);
+    if (!team) return res.status(404).json({ error: 'Equipo no encontrado' });
+    
+    if (team.created_by !== req.user.id && Number(userId) !== req.user.id) {
+      return res.status(403).json({ error: 'No autorizado para remover miembros de este equipo' });
+    }
+
+    await db.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?').run(id, userId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9. Delete team
+app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const team = await db.prepare('SELECT * FROM teams WHERE id = ?').get(id);
+    if (!team) return res.status(404).json({ error: 'Equipo no encontrado' });
+    if (team.created_by !== req.user.id) {
+      return res.status(403).json({ error: 'Solo el creador puede eliminar el equipo' });
+    }
+
+    await db.prepare('DELETE FROM team_members WHERE team_id = ?').run(id);
+    await db.prepare('UPDATE tasks SET team_id = NULL WHERE team_id = ?').run(id);
+    await db.prepare('DELETE FROM teams WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 10. Get shared tasks
+app.get('/api/shared-tasks', authenticateToken, async (req, res) => {
+  try {
+    const tasks = await db.prepare(`
+      SELECT t.*, u.username as creator_name, assign.username as assignee_name, team.name as team_name
+      FROM tasks t
+      LEFT JOIN users u ON t.user_id = u.id
+      LEFT JOIN users assign ON t.assigned_to = assign.id
+      LEFT JOIN teams team ON t.team_id = team.id
+      WHERE t.assigned_to = ?
+         OR t.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?)
+         OR (t.user_id = ? AND (t.assigned_to IS NOT NULL OR t.team_id IS NOT NULL))
+      ORDER BY t.created_at DESC
+    `).all(req.user.id, req.user.id, req.user.id);
+
+    if (tasks.length === 0) {
+      return res.json([]);
+    }
+
+    const taskIds = tasks.map(t => t.id);
+    const placeholders = taskIds.map(() => '?').join(',');
+    const subtasks = await db.prepare(`SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY created_at ASC`).all(...taskIds);
+    
+    const tasksWithSubtasks = tasks.map(task => {
+      task.subtasks = subtasks.filter(st => st.task_id === task.id);
+      return task;
+    });
+    
+    res.json(tasksWithSubtasks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

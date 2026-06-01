@@ -1,4 +1,4 @@
-import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Settings, Shield, LogOut } from 'lucide-react';
+import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Users, Settings, Shield, LogOut } from 'lucide-react';
 
 export function GlobalSidebar({ mainView, setMainView, onLogout, user }) {
   return (
@@ -51,6 +51,13 @@ export function GlobalSidebar({ mainView, setMainView, onLogout, user }) {
         title="Analytics Dashboard"
       >
         <BarChart2 size={24} />
+      </button>
+      <button 
+        className={`global-nav-item ${mainView === 'shared' ? 'active' : ''}`}
+        onClick={() => setMainView('shared')}
+        title="Equipos & Compartido"
+      >
+        <Users size={24} />
       </button>
       {user?.role === 'admin' && (
         <button 

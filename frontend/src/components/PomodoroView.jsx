@@ -38,36 +38,128 @@ export function PomodoroView({ tasks }) {
 
   const timerRef = useRef(null);
 
-  // Sound generator using Web Audio API
-  const playCompletionSound = () => {
+  // Native Web Audio API Synthesizer Sound Library
+  const soundLibrary = {
+    chime: {
+      name: '🔔 Campana Digital',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const playNote = (freq, delay, duration) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(destination);
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+          gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + delay + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+          osc.start(audioCtx.currentTime + delay);
+          osc.stop(audioCtx.currentTime + delay + duration);
+        };
+        playNote(523.25, 0, 0.4); // C5
+        playNote(659.25, 0.15, 0.6); // E5
+        playNote(783.99, 0.3, 0.8); // G5
+      }
+    },
+    zen: {
+      name: '🧘 Cuenco Tibetano',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(destination);
+        osc1.frequency.value = 220; // A3
+        osc1.type = 'sine';
+        osc2.frequency.value = 220.5; // Chorus detuned
+        osc2.type = 'sine';
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.2); // Slow attack
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5); // Warm slow decay
+        osc1.start(audioCtx.currentTime);
+        osc2.start(audioCtx.currentTime);
+        osc1.stop(audioCtx.currentTime + 2.5);
+        osc2.stop(audioCtx.currentTime + 2.5);
+      }
+    },
+    digital: {
+      name: '⏰ Alarma Retro',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const playBeep = (freq, start, duration) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(destination);
+          osc.frequency.value = freq;
+          osc.type = 'square';
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + start);
+          gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + start + 0.01);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime + start + duration - 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + start + duration);
+          osc.start(audioCtx.currentTime + start);
+          osc.stop(audioCtx.currentTime + start + duration);
+        };
+        playBeep(880, 0, 0.1);
+        playBeep(880, 0.15, 0.1);
+        playBeep(880, 0.3, 0.2);
+      }
+    },
+    piano: {
+      name: '🎹 Acorde de Piano',
+      play: (audioCtx, destination = audioCtx.destination) => {
+        const notes = [261.63, 329.63, 392.00, 523.25]; // C Major
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(destination);
+          osc.frequency.value = freq;
+          osc.type = 'triangle'; // Warm organic feel
+          const noteDelay = idx * 0.04;
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + noteDelay);
+          gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + noteDelay + 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + noteDelay + 1.2);
+          osc.start(audioCtx.currentTime + noteDelay);
+          osc.stop(audioCtx.currentTime + noteDelay + 1.2);
+        });
+      }
+    }
+  };
+
+  const playSound = (soundKey) => {
     if (!soundEnabled) return;
+    const key = soundKey || localStorage.getItem('pomodoro_alarm_sound') || 'chime';
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      
-      // Beautiful chime (two notes)
-      const playNote = (freq, delay, duration) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        
-        osc.frequency.value = freq;
-        osc.type = 'sine';
-        
-        gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
-        gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + delay + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-        
-        osc.start(audioCtx.currentTime + delay);
-        osc.stop(audioCtx.currentTime + delay + duration);
-      };
-      
-      playNote(523.25, 0, 0.4); // C5
-      playNote(659.25, 0.15, 0.6); // E5
-      playNote(783.99, 0.3, 0.8); // G5
+      const soundObj = soundLibrary[key];
+      if (soundObj) {
+        const masterGain = audioCtx.createGain();
+        const volume = parseFloat(localStorage.getItem('pomodoroVolume') || '0.5');
+        masterGain.gain.setValueAtTime(volume, audioCtx.currentTime);
+        masterGain.connect(audioCtx.destination);
+        soundObj.play(audioCtx, masterGain);
+      }
     } catch (e) {
       console.error('AudioContext error:', e);
     }
+  };
+
+  const playCompletionSound = () => {
+    if (!soundEnabled) return;
+    const soundKey = localStorage.getItem('pomodoro_alarm_sound') || 'chime';
+    const repeatCount = parseInt(localStorage.getItem('pomodoro_alarm_repeat_count') || '1', 10);
+    
+    let currentPlay = 0;
+    const playLoop = () => {
+      if (!soundEnabled) return;
+      playSound(soundKey);
+      currentPlay++;
+      if (currentPlay < repeatCount) {
+        setTimeout(playLoop, 1500);
+      }
+    };
+    playLoop();
   };
 
   useEffect(() => {
@@ -497,6 +589,8 @@ export function PomodoroView({ tasks }) {
               ))}
             </div>
           )}
+
+
         </div>
       </div>
       {pipWindow && createPortal(
