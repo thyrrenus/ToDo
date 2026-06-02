@@ -33,6 +33,26 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
   const [suggestedQuadrant, setSuggestedQuadrant] = useState(null);
   const isAIDisabled = localStorage.getItem('aiModelSelected') === 'desactivado';
 
+  const [allTags, setAllTags] = useState([]);
+  const [tagInput, setTagInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const fetchAllTags = async () => {
+    try {
+      const res = await fetch('/api/tags');
+      if (res.ok) {
+        const data = await res.json();
+        setAllTags(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllTags();
+  }, [task]);
+
   const handleAIBreakdown = () => {
     if (!task) return;
     setAiLoading(true);
@@ -643,6 +663,188 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+          </div>
+        )}
+
+        {!isSubtaskMode && task && (
+          <div className="detail-tags-field" style={{ marginBottom: '1.25rem' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Etiquetas</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+              {task.tags && task.tags.map(tag => (
+                <span 
+                  key={tag.id}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    backgroundColor: `${tag.color || '#8e95a5'}15`,
+                    color: tag.color || 'var(--text-secondary)',
+                    border: `1px solid ${tag.color || '#8e95a5'}35`,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  #{tag.name}
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const updatedTags = task.tags.filter(t => t.id !== tag.id).map(t => t.name);
+                      try {
+                        const res = await fetch(`/api/tasks/${task.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ tags: updatedTags })
+                        });
+                        if (res.ok) {
+                          onUpdate();
+                        }
+                      } catch (err) {
+                        console.error('Error removing tag:', err);
+                      }
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: tag.color || 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      opacity: 0.6,
+                      fontSize: '10px'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <input
+                  type="text"
+                  placeholder="+ Añadir etiqueta"
+                  value={tagInput}
+                  onChange={(e) => {
+                    setTagInput(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => {
+                    fetchAllTags();
+                    setShowSuggestions(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setShowSuggestions(false);
+                    }, 250);
+                  }}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = tagInput.trim().toLowerCase();
+                      if (!val) return;
+                      const currentTagNames = task.tags ? task.tags.map(t => t.name) : [];
+                      if (!currentTagNames.includes(val)) {
+                        const updatedTags = [...currentTagNames, val];
+                        try {
+                          const res = await fetch(`/api/tasks/${task.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tags: updatedTags })
+                          });
+                          if (res.ok) {
+                            setTagInput('');
+                            setShowSuggestions(false);
+                            onUpdate();
+                            fetchAllTags();
+                          }
+                        } catch (err) {
+                          console.error('Error adding tag:', err);
+                        }
+                      } else {
+                        setTagInput('');
+                        setShowSuggestions(false);
+                      }
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px dashed var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                    width: '120px',
+                    transition: 'all 0.2s'
+                  }}
+                />
+                {showSuggestions && tagInput.trim() !== '' && (
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      bottom: '26px',
+                      left: 0,
+                      zIndex: 100,
+                      background: 'var(--right-pane-bg)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                      maxHeight: '150px',
+                      overflowY: 'auto',
+                      width: '180px'
+                    }}
+                  >
+                    {allTags
+                      .filter(tag => 
+                        tag.name.toLowerCase().includes(tagInput.toLowerCase()) && 
+                        !(task.tags && task.tags.some(t => t.id === tag.id))
+                      )
+                      .map(tag => (
+                        <div
+                          key={tag.id}
+                          onClick={async () => {
+                            const currentTagNames = task.tags ? task.tags.map(t => t.name) : [];
+                            const updatedTags = [...currentTagNames, tag.name];
+                            try {
+                              const res = await fetch(`/api/tasks/${task.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ tags: updatedTags })
+                              });
+                              if (res.ok) {
+                                setTagInput('');
+                                setShowSuggestions(false);
+                                onUpdate();
+                              }
+                            } catch (err) {
+                              console.error('Error adding tag from suggestion:', err);
+                            }
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: tag.color }} />
+                          #{tag.name}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

@@ -165,9 +165,9 @@ app.get('/api/lists', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/lists', authenticateToken, async (req, res) => {
-  const { name, color } = req.body;
+  const { name, color, group_id, icon } = req.body;
   try {
-    const info = await db.prepare('INSERT INTO lists (name, color, user_id) VALUES (?, ?, ?)').run(name, color, req.user.id);
+    const info = await db.prepare('INSERT INTO lists (name, color, user_id, group_id, icon) VALUES (?, ?, ?, ?, ?)').run(name, color, req.user.id, group_id || null, icon || null);
     const newList = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
     res.json(newList);
   } catch (err) {
@@ -176,10 +176,20 @@ app.post('/api/lists', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/lists/:id', authenticateToken, async (req, res) => {
-  const { name, color } = req.body;
+  const { name, color, group_id, icon } = req.body;
   const { id } = req.params;
   try {
-    await db.prepare('UPDATE lists SET name = ?, color = ? WHERE id = ? AND user_id = ?').run(name, color, id, req.user.id);
+    const current = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!current) return res.status(404).json({ error: 'List not found' });
+
+    await db.prepare('UPDATE lists SET name = ?, color = ?, group_id = ?, icon = ? WHERE id = ? AND user_id = ?').run(
+      name !== undefined ? name : current.name,
+      color !== undefined ? color : current.color,
+      group_id !== undefined ? group_id : current.group_id,
+      icon !== undefined ? icon : current.icon,
+      id,
+      req.user.id
+    );
     const updatedList = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(id, req.user.id);
     res.json(updatedList);
   } catch (err) {
@@ -193,6 +203,70 @@ app.delete('/api/lists/:id', authenticateToken, async (req, res) => {
     // Optional: Delete all tasks in the list first
     await db.prepare('DELETE FROM tasks WHERE list_id = ? AND user_id = ?').run(id, req.user.id);
     await db.prepare('DELETE FROM lists WHERE id = ? AND user_id = ?').run(id, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- LIST GROUPS: CRUD ENDPOINTS ---
+
+// 1. Get all list groups
+app.get('/api/list-groups', authenticateToken, async (req, res) => {
+  try {
+    const groups = await db.prepare('SELECT * FROM list_groups WHERE user_id = ? ORDER BY order_index ASC, created_at ASC').all(req.user.id);
+    res.json(groups);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Create list group
+app.post('/api/list-groups', authenticateToken, async (req, res) => {
+  const { name, color, icon } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre de grupo requerido' });
+
+  try {
+    const info = await db.prepare('INSERT INTO list_groups (name, color, icon, user_id) VALUES (?, ?, ?, ?)').run(name.trim(), color || '#7c3aed', icon || 'Folder', req.user.id);
+    const group = await db.prepare('SELECT * FROM list_groups WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
+    res.json(group);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Update list group
+app.put('/api/list-groups/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { name, color, order_index, icon } = req.body;
+  try {
+    const current = await db.prepare('SELECT * FROM list_groups WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!current) return res.status(404).json({ error: 'Grupo no encontrado' });
+
+    await db.prepare('UPDATE list_groups SET name = ?, color = ?, order_index = ?, icon = ? WHERE id = ? AND user_id = ?').run(
+      name !== undefined ? name.trim() : current.name,
+      color !== undefined ? color : current.color,
+      order_index !== undefined ? order_index : current.order_index,
+      icon !== undefined ? icon : current.icon,
+      id,
+      req.user.id
+    );
+    const updated = await db.prepare('SELECT * FROM list_groups WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Delete list group
+app.delete('/api/list-groups/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const current = await db.prepare('SELECT * FROM list_groups WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!current) return res.status(404).json({ error: 'Grupo no encontrado' });
+
+    await db.prepare('UPDATE lists SET group_id = NULL WHERE group_id = ?').run(id);
+    await db.prepare('DELETE FROM list_groups WHERE id = ? AND user_id = ?').run(id, req.user.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -252,6 +326,31 @@ app.delete('/api/sections/:id', authenticateToken, async (req, res) => {
 });
 
 // --- TASKS ---
+
+const associateTaskTags = async (taskId, userId, tagsArray) => {
+  if (!tagsArray) return;
+  // 1. Clear old tags for this task
+  await db.prepare('DELETE FROM task_tags WHERE task_id = ?').run(taskId);
+
+  // 2. Loop and link
+  const colors = ['#f87171', '#f97316', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#f472b6'];
+  for (const tagName of tagsArray) {
+    if (!tagName || !tagName.trim()) continue;
+    const cleanName = tagName.trim().toLowerCase();
+
+    // Ensure tag exists in tags table
+    let tag = await db.prepare('SELECT id FROM tags WHERE name = ? AND user_id = ?').get(cleanName, userId);
+    if (!tag) {
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      const insertRes = await db.prepare('INSERT INTO tags (name, color, user_id) VALUES (?, ?, ?)').run(cleanName, randomColor, userId);
+      tag = { id: insertRes.lastInsertRowid };
+    }
+
+    // Link task to tag
+    await db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)').run(taskId, tag.id);
+  }
+};
+
 app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
     const tasks = await db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
@@ -262,9 +361,18 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
     const placeholders = taskIds.map(() => '?').join(',');
     const subtasks = await db.prepare(`SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY created_at ASC`).all(...taskIds);
     
-    // Group subtasks by task_id
+    // Fetch tags for these tasks
+    const taskTags = await db.prepare(`
+      SELECT tt.task_id, t.id as tag_id, t.name, t.color
+      FROM task_tags tt
+      JOIN tags t ON tt.tag_id = t.id
+      WHERE t.user_id = ?
+    `).all(req.user.id);
+
+    // Group subtasks and tags by task_id
     const tasksWithSubtasks = tasks.map(task => {
       task.subtasks = subtasks.filter(st => st.task_id === task.id);
+      task.tags = taskTags.filter(tt => tt.task_id === task.id).map(tt => ({ id: tt.tag_id, name: tt.name, color: tt.color }));
       return task;
     });
     
@@ -275,7 +383,7 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to } = req.body;
+  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags } = req.body;
   try {
     const info = await db.prepare(`
       INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to) 
@@ -293,7 +401,21 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       team_id || null, 
       assigned_to || null
     );
-    const newTask = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(info.lastInsertRowid);
+    const taskId = info.lastInsertRowid;
+    
+    // Link tags
+    if (tags && Array.isArray(tags)) {
+      await associateTaskTags(taskId, req.user.id, tags);
+    }
+
+    const newTask = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+    const tTags = await db.prepare(`
+      SELECT t.id as tag_id, t.name, t.color
+      FROM task_tags tt
+      JOIN tags t ON tt.tag_id = t.id
+      WHERE tt.task_id = ?
+    `).all(taskId);
+    newTask.tags = tTags.map(tt => ({ id: tt.tag_id, name: tt.name, color: tt.color }));
     res.json(newTask);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -301,7 +423,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
-  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to } = req.body;
+  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags } = req.body;
   const { id } = req.params;
   try {
     const current = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
@@ -340,7 +462,19 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       id
     );
 
+    // Update tags
+    if (tags && Array.isArray(tags)) {
+      await associateTaskTags(id, req.user.id, tags);
+    }
+
     const updatedTask = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+    const tTags = await db.prepare(`
+      SELECT t.id as tag_id, t.name, t.color
+      FROM task_tags tt
+      JOIN tags t ON tt.tag_id = t.id
+      WHERE tt.task_id = ?
+    `).all(id);
+    updatedTask.tags = tTags.map(tt => ({ id: tt.tag_id, name: tt.name, color: tt.color }));
     res.json(updatedTask);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -801,12 +935,89 @@ app.get('/api/shared-tasks', authenticateToken, async (req, res) => {
     const placeholders = taskIds.map(() => '?').join(',');
     const subtasks = await db.prepare(`SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY created_at ASC`).all(...taskIds);
     
+    // Fetch tags for these tasks
+    let taskTags = [];
+    if (taskIds.length > 0) {
+      taskTags = await db.prepare(`
+        SELECT tt.task_id, t.id as tag_id, t.name, t.color
+        FROM task_tags tt
+        JOIN tags t ON tt.tag_id = t.id
+        WHERE tt.task_id IN (${placeholders})
+      `).all(...taskIds);
+    }
+
     const tasksWithSubtasks = tasks.map(task => {
       task.subtasks = subtasks.filter(st => st.task_id === task.id);
+      task.tags = taskTags.filter(tt => tt.task_id === task.id).map(tt => ({ id: tt.tag_id, name: tt.name, color: tt.color }));
       return task;
     });
     
     res.json(tasksWithSubtasks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- TAGS: CRUD ENDPOINTS ---
+
+// 1. Get all tags
+app.get('/api/tags', authenticateToken, async (req, res) => {
+  try {
+    const tags = await db.prepare('SELECT * FROM tags WHERE user_id = ? ORDER BY name ASC').all(req.user.id);
+    res.json(tags);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Create tag
+app.post('/api/tags', authenticateToken, async (req, res) => {
+  const { name, color } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre de etiqueta requerido' });
+  
+  const colors = ['#f87171', '#f97316', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#f472b6'];
+  const finalColor = color || colors[Math.floor(Math.random() * colors.length)];
+
+  try {
+    await db.prepare('INSERT OR IGNORE INTO tags (name, color, user_id) VALUES (?, ?, ?)').run(name.trim().toLowerCase(), finalColor, req.user.id);
+    const tag = await db.prepare('SELECT * FROM tags WHERE name = ? AND user_id = ?').get(name.trim().toLowerCase(), req.user.id);
+    res.json(tag);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Update tag
+app.put('/api/tags/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { name, color } = req.body;
+  try {
+    const current = await db.prepare('SELECT * FROM tags WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!current) return res.status(404).json({ error: 'Etiqueta no encontrada' });
+
+    await db.prepare('UPDATE tags SET name = ?, color = ? WHERE id = ? AND user_id = ?').run(
+      name !== undefined ? name.trim().toLowerCase() : current.name,
+      color !== undefined ? color : current.color,
+      id,
+      req.user.id
+    );
+    const updated = await db.prepare('SELECT * FROM tags WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Delete tag
+app.delete('/api/tags/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const current = await db.prepare('SELECT * FROM tags WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!current) return res.status(404).json({ error: 'Etiqueta no encontrada' });
+
+    await db.prepare('DELETE FROM task_tags WHERE tag_id = ?').run(id);
+    await db.prepare('DELETE FROM tags WHERE id = ? AND user_id = ?').run(id, req.user.id);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

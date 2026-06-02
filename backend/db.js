@@ -152,6 +152,36 @@ const initDb = async () => {
       FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE(user_id, friend_id)
     );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT,
+      user_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(name, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS task_tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL,
+      tag_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+      UNIQUE(task_id, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS list_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT,
+      user_id INTEGER NOT NULL,
+      order_index INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // 2. Safe Alterations (Migrations)
@@ -168,8 +198,11 @@ const initDb = async () => {
     ALTER TABLE tasks ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
     ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
     ALTER TABLE tasks ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL;
-    ALTER TABLE tasks ADD COLUMN assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
-  `);
+     ALTER TABLE tasks ADD COLUMN assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
+     ALTER TABLE lists ADD COLUMN group_id INTEGER REFERENCES list_groups(id) ON DELETE SET NULL;
+     ALTER TABLE lists ADD COLUMN icon TEXT;
+     ALTER TABLE list_groups ADD COLUMN icon TEXT;
+   `);
 
   // 3. Ensure a default list if empty
   try {

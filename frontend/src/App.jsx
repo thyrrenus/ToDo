@@ -16,7 +16,9 @@ import { ProjectKanbanView } from './components/ProjectKanbanView';
 import { SectionHeader } from './components/SectionHeader';
 import { AdminView } from './components/AdminView';
 import { SharedTasksView } from './components/SharedTasksView';
-import { Inbox, Plus, Mic } from 'lucide-react';
+import { EmptyState } from './components/EmptyState';
+import { CommandPalette } from './components/CommandPalette';
+import { Inbox, Plus, Mic, X } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from './utils/notifications';
 
@@ -87,21 +89,27 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     title = title.replace('!', '');
   }
 
-  // 2. Extract list hashtags (e.g. #Trabajo, #Personal)
-  let unmatchedHashtag = null;
-  const hashtagRegex = /#(\w+)/g;
+  // 2. Extract hashtags (e.g. #Trabajo, #urgente, #5min)
+  let tags = [];
+  const hashtagRegex = /#([\wáéíóúñ\-]+)/gi;
   let match;
+  hashtagRegex.lastIndex = 0;
+  const matchesToReplace = [];
   while ((match = hashtagRegex.exec(title)) !== null) {
+    const fullMatch = match[0];
     const hashtag = match[1];
     const matchedList = lists.find(l => l.name.toLowerCase() === hashtag.toLowerCase());
     if (matchedList) {
       list_id = matchedList.id;
-      title = title.replace(`#${hashtag}`, '');
     } else {
-      unmatchedHashtag = hashtag;
-      title = title.replace(`#${hashtag}`, '');
+      tags.push(hashtag.toLowerCase());
     }
+    matchesToReplace.push(fullMatch);
   }
+  for (const matchStr of matchesToReplace) {
+    title = title.replace(matchStr, '');
+  }
+  tags = Array.from(new Set(tags));
 
   // 3. Extract dates
   if (/\bhoy\b/i.test(title)) {
@@ -196,7 +204,7 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     due_date,
     start_time,
     end_time,
-    unmatchedHashtag
+    tags
   };
 }
 
@@ -418,6 +426,15 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [lists, setLists] = useState([]);
   const [sections, setSections] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [activeTagFilter, setActiveTagFilter] = useState(null);
+  const [listGroups, setListGroups] = useState([]);
+  // Smart filters states
+  const [filterPriority, setFilterPriority] = useState(null);
+  const [filterHideCompleted, setFilterHideCompleted] = useState(false);
+  const [filterTagId, setFilterTagId] = useState(null);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [activeList, setActiveList] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -828,6 +845,31 @@ function App() {
       const res = await fetch('/api/tasks');
       const data = await res.json();
       setTasks(data);
+      fetchTags();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchTags = async () => {
+    try {
+      const res = await fetch('/api/tags');
+      if (res.ok) {
+        const data = await res.json();
+        setTags(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchListGroups = async () => {
+    try {
+      const res = await fetch('/api/list-groups');
+      if (res.ok) {
+        const data = await res.json();
+        setListGroups(data);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -838,6 +880,7 @@ function App() {
       const res = await fetch('/api/lists');
       const data = await res.json();
       setLists(data);
+      fetchListGroups();
     } catch (err) {
       console.error(err);
     }
@@ -932,12 +975,7 @@ function App() {
   }, [tasks]);
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    Promise.all([fetchTasks(), fetchLists(), fetchSections()]).then(() => {
+     Promise.all([fetchTasks(), fetchLists(), fetchSections(), fetchTags(), fetchListGroups()]).then(() => {
       setLoading(false);
       const params = new URLSearchParams(window.location.search);
       const action = params.get('action');
@@ -948,7 +986,61 @@ function App() {
         }, 300);
       }
     });
-    
+  }, [token]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+        return;
+      }
+
+      const active = document.activeElement;
+      if (active && (
+        active.tagName === 'INPUT' || 
+        active.tagName === 'TEXTAREA' || 
+        active.contentEditable === 'true'
+      )) {
+        if (e.key === 'Escape') {
+          active.blur();
+          setIsCommandPaletteOpen(false);
+          setIsShortcutsModalOpen(false);
+          setSelectedTaskId(null);
+          setSelectedSubtaskId(null);
+        }
+        return; 
+      }
+
+      if (e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        const input = document.querySelector('.quick-add-bar input');
+        if (input) input.focus();
+      }
+
+      if (e.key === '?') {
+        e.preventDefault();
+        setIsShortcutsModalOpen(prev => !prev);
+      }
+
+      if (e.key === 'Escape') {
+        setSelectedTaskId(null);
+        setSelectedSubtaskId(null);
+        setIsCommandPaletteOpen(false);
+        setIsShortcutsModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     // Fetch external events on app mount
     const userId = user?.id;
     if (userId) {
@@ -1054,38 +1146,8 @@ function App() {
     const titleToUse = typeof overrideTitle === 'string' ? overrideTitle : quickAddTitle;
     if (!titleToUse.trim()) return;
 
-    // Ejecutar el motor local NLP para autocompletar propiedades
     const parsedTaskData = parseNLPQuickAdd(titleToUse, lists, activeList);
     let finalTaskData = { ...parsedTaskData };
-
-    if (parsedTaskData.unmatchedHashtag) {
-      try {
-        const listName = parsedTaskData.unmatchedHashtag;
-        const colorPalette = ['#7c3aed', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-        const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-
-        const listRes = await fetch('/api/lists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: listName.charAt(0).toUpperCase() + listName.slice(1),
-            color: randomColor
-          })
-        });
-
-        if (listRes.ok) {
-          const newList = await listRes.json();
-          if (newList && newList.id) {
-            finalTaskData.list_id = newList.id;
-          }
-          await fetchLists();
-        }
-      } catch (err) {
-        console.error('Error auto-creating list:', err);
-      }
-    }
-
-    delete finalTaskData.unmatchedHashtag;
 
     try {
       const res = await fetch('/api/tasks', {
@@ -1096,6 +1158,7 @@ function App() {
       if (res.ok) {
         setQuickAddTitle('');
         fetchTasks();
+        fetchTags();
       }
     } catch (err) {
       console.error(err);
@@ -1103,6 +1166,27 @@ function App() {
   };
 
   const filteredTasks = tasks.filter(task => {
+    // 1. Hide completed filter
+    if (filterHideCompleted && task.is_completed) {
+      return false;
+    }
+
+    // 2. Priority filter
+    if (filterPriority !== null && task.priority !== filterPriority) {
+      return false;
+    }
+
+    // 3. Tag ID filter
+    if (filterTagId !== null) {
+      if (!task.tags || !task.tags.some(t => t.id === filterTagId)) {
+        return false;
+      }
+    }
+
+    // 4. List and Tag view filter
+    if (activeTagFilter) {
+      return task.tags && task.tags.some(t => t.name.toLowerCase() === activeTagFilter.toLowerCase());
+    }
     if (activeList === 'inbox') {
       return task.list_id === null || task.list_id === inboxListId;
     }
@@ -1274,7 +1358,21 @@ function App() {
       
       <div className="app-container">
         {mainView === 'tasks' && (
-          <Sidebar activeList={activeList} setActiveList={setActiveList} lists={lists} onRefreshLists={fetchLists} />
+          <Sidebar 
+            activeList={activeList} 
+            setActiveList={(val) => {
+              setActiveList(val);
+              setActiveTagFilter(null);
+            }} 
+            lists={lists} 
+            onRefreshLists={fetchLists} 
+            tasks={tasks}
+            tags={tags}
+            activeTagFilter={activeTagFilter}
+            setActiveTagFilter={setActiveTagFilter}
+            listGroups={listGroups}
+            onRefreshListGroups={fetchListGroups}
+          />
         )}
         
         <main className={`main-content ${selectedTaskId || selectedSubtaskId ? 'pane-open' : ''}`}>
@@ -1282,7 +1380,53 @@ function App() {
             <>
               <header className="header ticktick-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <h1 style={{ marginBottom: 0 }}>{getHeaderTitle()}</h1>
+                  <h1 style={{ marginBottom: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {activeTagFilter ? `Etiqueta: #${activeTagFilter}` : getHeaderTitle()}
+                  </h1>
+                  {activeTagFilter && (
+                    <button 
+                      onClick={() => setActiveTagFilter(null)}
+                      className="clear-tag-filter-btn"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.2s',
+                        marginLeft: '8px'
+                      }}
+                    >
+                      Limpiar filtro <X size={12} />
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setIsShortcutsModalOpen(true)}
+                    title="Atajos de teclado (?)"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '28px',
+                      height: '28px',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      marginLeft: 'auto'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                  >
+                    ⌨️
+                  </button>
                   
                   {activeList === 'today' && (
                     <button
@@ -1416,6 +1560,165 @@ function App() {
                   )}
                 </button>
               </form>
+
+              {/* --- PREMIUM CENTRAL QUICK FILTER BAR --- */}
+              <div 
+                className="quick-filter-bar"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '12px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  alignItems: 'center',
+                  marginBottom: '16px',
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+                  animation: 'fadeIn 0.2s ease-out'
+                }}
+              >
+                {/* Priority Selection Pills */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', borderRight: '1px solid rgba(255,255,255,0.08)', paddingRight: '12px', marginRight: '4px', flexShrink: 0 }}>
+                  {[
+                    { val: 3, label: '!!! Alta', color: '#ef4444' },
+                    { val: 2, label: '!! Media', color: '#f59e0b' },
+                    { val: 1, label: '! Baja', color: '#3b82f6' }
+                  ].map(p => {
+                    const isAct = filterPriority === p.val;
+                    return (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => setFilterPriority(prev => prev === p.val ? null : p.val)}
+                        style={{
+                          background: isAct ? `${p.color}22` : 'rgba(255, 255, 255, 0.02)',
+                          border: isAct ? `1.5px solid ${p.color}` : '1.5px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '20px',
+                          color: isAct ? p.color : 'var(--text-secondary)',
+                          padding: '5px 12px',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: isAct ? `0 0 10px ${p.color}30` : 'none',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => { if (!isAct) e.currentTarget.style.borderColor = p.color; }}
+                        onMouseLeave={e => { if (!isAct) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Hide Completed Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setFilterHideCompleted(prev => !prev)}
+                  style={{
+                    background: filterHideCompleted ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    border: filterHideCompleted ? '1.5px solid var(--accent-color)' : '1.5px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '20px',
+                    color: filterHideCompleted ? 'var(--accent-color)' : 'var(--text-secondary)',
+                    padding: '5px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: filterHideCompleted ? '0 0 10px rgba(59, 130, 246, 0.25)' : 'none',
+                    transition: 'all 0.2s ease',
+                    flexShrink: 0
+                  }}
+                  onMouseEnter={e => { if (!filterHideCompleted) e.currentTarget.style.borderColor = 'var(--accent-color)'; }}
+                  onMouseLeave={e => { if (!filterHideCompleted) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                >
+                  👁️ {filterHideCompleted ? 'Completadas Ocultas' : 'Ocultar Completadas'}
+                </button>
+
+                {/* Vertical Divider */}
+                <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.08)', margin: '0 4px', flexShrink: 0 }} />
+
+                {/* Tags Carousel */}
+                <div 
+                  style={{ 
+                    display: 'flex', 
+                    gap: '6px', 
+                    overflowX: 'auto', 
+                    flex: 1, 
+                    padding: '2px 0', 
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none'
+                  }}
+                >
+                  {tags.map(t => {
+                    const isAct = filterTagId === t.id;
+                    const tagColor = t.color || '#8e95a5';
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setFilterTagId(prev => prev === t.id ? null : t.id)}
+                        style={{
+                          background: isAct ? `${tagColor}22` : 'rgba(255, 255, 255, 0.02)',
+                          border: isAct ? `1.5px solid ${tagColor}` : '1.5px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '20px',
+                          color: isAct ? tagColor : 'var(--text-secondary)',
+                          padding: '5px 12px',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          boxShadow: isAct ? `0 0 10px ${tagColor}30` : 'none',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => { if (!isAct) e.currentTarget.style.borderColor = tagColor; }}
+                        onMouseLeave={e => { if (!isAct) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                      >
+                        #{t.name}
+                      </button>
+                    );
+                  })}
+                  {tags.length === 0 && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', paddingLeft: '4px' }}>Sin etiquetas</span>
+                  )}
+                </div>
+
+                {/* Clear Filters Button */}
+                {(filterPriority !== null || filterHideCompleted || filterTagId !== null) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterPriority(null);
+                      setFilterHideCompleted(false);
+                      setFilterTagId(null);
+                    }}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1.5px solid var(--danger-color)',
+                      borderRadius: '20px',
+                      color: 'var(--danger-color)',
+                      padding: '5px 12px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 0 10px rgba(239, 68, 68, 0.15)',
+                      flexShrink: 0
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
 
               {loading ? (
                 <div>Loading...</div>
@@ -1598,25 +1901,22 @@ function App() {
                   )}
                 </div>
               ) : (
-                <div className="empty-state">
-                  <Inbox />
-                  <p>No tasks found. Add a task above!</p>
-                  {typeof activeList === 'number' && (
-                     <button className="add-section-btn mt-4" onClick={async () => {
-                       const name = prompt('New Section Name:');
-                       if (name) {
-                         await fetch('/api/sections', {
-                           method: 'POST',
-                           headers: { 'Content-Type': 'application/json' },
-                           body: JSON.stringify({ list_id: activeList, name })
-                         });
-                         fetchSections();
-                       }
-                     }}>
-                       <Plus size={16} /> Add Section
-                     </button>
-                  )}
-                </div>
+                <EmptyState 
+                  type={
+                    activeList === 'today' 
+                      ? 'today' 
+                      : activeList === 'upcoming' 
+                        ? 'upcoming' 
+                        : activeList === 'inbox' 
+                          ? 'inbox' 
+                          : 'generic'
+                  }
+                  onActionClick={() => {
+                    const input = document.querySelector('.quick-add-bar input');
+                    if (input) input.focus();
+                  }}
+                  actionLabel="Crear una tarea"
+                />
               )}
             </>
           ) : mainView === 'calendar' ? (
@@ -1762,6 +2062,109 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Keyboard Shortcuts Cheatsheet Modal */}
+        {isShortcutsModalOpen && (
+          <div 
+            onClick={() => setIsShortcutsModalOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <div 
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '440px',
+                background: 'rgba(28, 28, 30, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '24px',
+                boxShadow: '0 24px 50px rgba(0, 0, 0, 0.6)',
+                animation: 'fadeIn 0.25s ease-out'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'white' }}>⌨️ Atajos de Teclado</h3>
+                <button 
+                  onClick={() => setIsShortcutsModalOpen(false)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Abrir Paleta de Comandos</span>
+                  <kbd style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', padding: '3px 6px', fontSize: '0.75rem', color: 'white', fontFamily: 'monospace' }}>Ctrl + K</kbd>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Enfocar Entrada Rápida de Tarea</span>
+                  <kbd style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', padding: '3px 6px', fontSize: '0.75rem', color: 'white', fontFamily: 'monospace' }}>N</kbd>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cerrar Paneles o Modales</span>
+                  <kbd style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', padding: '3px 6px', fontSize: '0.75rem', color: 'white', fontFamily: 'monospace' }}>Esc</kbd>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Mostrar esta Guía de Ayuda</span>
+                  <kbd style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', padding: '3px 6px', fontSize: '0.75rem', color: 'white', fontFamily: 'monospace' }}>?</kbd>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                <button
+                  onClick={() => setIsShortcutsModalOpen(false)}
+                  style={{
+                    background: 'var(--accent-hover)',
+                    border: 'none',
+                    color: 'white',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    width: '100%',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Global Command Palette */}
+        <CommandPalette 
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          tasks={tasks}
+          lists={lists}
+          onNavigateView={(viewId) => {
+            setMainView(viewId);
+          }}
+          onSelectList={(listId, taskId) => {
+            setMainView('tasks');
+            setActiveList(listId);
+            setActiveTagFilter(null);
+            if (taskId) {
+              setSelectedTaskId(taskId);
+              setSelectedSubtaskId(null);
+            }
+          }}
+        />
       </div>
     </div>
   );

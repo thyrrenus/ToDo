@@ -119,8 +119,29 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
             </form>
           )}
 
-          {(task.due_date || totalSubtasks > 0 || (task.description && task.description !== '<p><br></p>')) && (
-            <div className="task-meta">
+          {(task.due_date || totalSubtasks > 0 || (task.description && task.description !== '<p><br></p>') || (task.tags && task.tags.length > 0)) && (
+            <div className="task-meta" style={{ flexWrap: 'wrap', gap: '6px' }}>
+              {task.tags && task.tags.map(tag => (
+                <span 
+                  key={tag.id} 
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    backgroundColor: `${tag.color || '#8e95a5'}15`,
+                    color: tag.color || 'var(--text-secondary)',
+                    border: `1px solid ${tag.color || '#8e95a5'}33`,
+                    boxShadow: `0 0 6px ${tag.color || '#8e95a5'}05`,
+                    marginRight: '2px'
+                  }}
+                >
+                  #{tag.name}
+                </span>
+              ))}
               {task.description && task.description !== '<p><br></p>' && (
                 <div className="task-meta-item">
                   <AlignLeft size={12} />
