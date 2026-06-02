@@ -21,6 +21,8 @@ import { CommandPalette } from './components/CommandPalette';
 import { Inbox, Plus, Mic, X } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from './utils/notifications';
+import { parseTimezoneOffset, getTimezoneDiffMinutes, adjustExternalDate } from './utils/timezone';
+
 
 // --- SECURE API FETCH INTERCEPTOR FOR JWT ---
 const originalFetch = window.fetch;
@@ -429,7 +431,12 @@ function App() {
   const [tags, setTags] = useState([]);
   const [activeTagFilter, setActiveTagFilter] = useState(null);
   const [listGroups, setListGroups] = useState([]);
+  const [homeTimezone, setHomeTimezone] = useState(() => localStorage.getItem('homeTimezone') || 'browser');
+  const [activeTimezoneMode, setActiveTimezoneMode] = useState(() => localStorage.getItem('activeTimezoneMode') || 'home');
+  const [acknowledgedTimezone, setAcknowledgedTimezone] = useState(() => localStorage.getItem('acknowledgedTimezoneOffset') || '');
+  const [dismissedTimezoneBanner, setDismissedTimezoneBanner] = useState(false);
   // Smart filters states
+
   const [filterPriority, setFilterPriority] = useState(null);
   const [filterHideCompleted, setFilterHideCompleted] = useState(false);
   const [filterTagId, setFilterTagId] = useState(null);
@@ -474,16 +481,29 @@ function App() {
       const recognition = new SpeechRecognition();
       recognition.lang = 'es-ES';
       recognition.interimResults = true;
+      recognition.continuous = true;
       recognition.maxAlternatives = 1;
+
+      let silenceTimer = null;
+
+      const resetSilenceTimer = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          console.log('[SPEECH] Inactivity timeout. Stopping recognition.');
+          recognition.stop();
+        }, 5000); // 5 segundos de silencio tolerados antes de guardar/cerrar
+      };
 
       recognition.onstart = () => {
         setIsListening(true);
         setListeningSource(source);
+        resetSilenceTimer();
       };
 
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         setIsListening(false);
+        if (silenceTimer) clearTimeout(silenceTimer);
         if (event.error === 'not-allowed') {
           alert('Permiso de micrófono denegado. Por favor, habilita el micrófono en la configuración de tu navegador.');
         }
@@ -492,21 +512,24 @@ function App() {
       recognition.onend = () => {
         setIsListening(false);
         window.activeRecognition = null;
+        if (silenceTimer) clearTimeout(silenceTimer);
       };
 
       recognition.onresult = (event) => {
+        resetSilenceTimer();
         let interimTranscript = '';
         let finalTranscript = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
+          const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+            finalTranscript += transcript;
           } else {
-            interimTranscript += event.results[i][0].transcript;
+            interimTranscript += transcript;
           }
         }
 
-        let currentText = finalTranscript || interimTranscript;
+        let currentText = (finalTranscript + interimTranscript).trim();
 
         // 1. Detección del comando de auto-guardado manos libres al final del dictado
         let shouldAutoSubmit = false;
@@ -548,6 +571,7 @@ function App() {
             window.activeRecognition.stop();
           }
           setIsListening(false);
+          if (silenceTimer) clearTimeout(silenceTimer);
           
           // Guardar de inmediato usando la función con anulación directa de estado
           setTimeout(() => {
@@ -693,6 +717,7 @@ function App() {
   const [activeDragSectionId, setActiveDragSectionId] = useState(null);
   const [projectLayout, setProjectLayout] = useState('list'); // 'list' or 'kanban'
   const [externalEvents, setExternalEvents] = useState([]);
+  const [externalEventsError, setExternalEventsError] = useState(null);
   const [outlookIcalUrl, setOutlookIcalUrl] = useState(() => {
     const userId = user?.id;
     if (!userId) return '';
@@ -709,24 +734,119 @@ function App() {
     return '';
   });
 
+  const [toasts, setToasts] = useState([]);
+  const notifiedConflictsRef = useRef(new Set());
+
+  const showToast = (title, message, type = 'warning') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, title, message, type }]);
+    
+    // Auto-remove after 6 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000);
+  };
+
   const fetchExternalEvents = async (urlToFetch) => {
     const url = urlToFetch || outlookIcalUrl;
     if (!url) {
       setExternalEvents([]);
+      setExternalEventsError(null);
       return;
     }
     try {
-      const res = await fetch(`/api/external-events?url=${encodeURIComponent(url)}`);
+      setExternalEventsError(null);
+      const res = await fetch(`/api/external-events?url=${encodeURIComponent(url.trim())}`);
       if (res.ok) {
         const data = await res.json();
-        setExternalEvents(data);
+        setExternalEvents(Array.isArray(data) ? data : []);
       } else {
-        console.error('Failed to fetch external events:', res.statusText);
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error || res.statusText || 'Error al obtener el calendario';
+        console.error('Failed to fetch external events:', errMsg);
+        setExternalEventsError(errMsg);
       }
     } catch (err) {
       console.error('Error fetching external events:', err);
+      setExternalEventsError(err.message || 'Error de conexión');
     }
   };
+
+  useEffect(() => {
+    if (!tasks || !externalEvents || tasks.length === 0 || externalEvents.length === 0) return;
+
+    const parseDate = (dStr) => {
+      if (!dStr) return null;
+      try {
+        const d = parseISO(dStr);
+        return isNaN(d.getTime()) ? null : d;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const activeTasks = [];
+    tasks.forEach(t => {
+      if (t.is_completed) return;
+      const start = parseDate(t.start_time);
+      const end = parseDate(t.end_time);
+      if (start && end) {
+        activeTasks.push({ id: `task-${t.id}`, title: t.title, start, end });
+      }
+      if (t.subtasks && Array.isArray(t.subtasks)) {
+        t.subtasks.forEach(st => {
+          if (st.is_completed) return;
+          const stStart = parseDate(st.start_time);
+          const stEnd = parseDate(st.end_time);
+          if (stStart && stEnd) {
+            activeTasks.push({ id: `sub-${st.id}`, title: `${t.title} > ${st.title}`, start: stStart, end: stEnd });
+          }
+        });
+      }
+    });
+
+    const parsedEvents = externalEvents.map(e => {
+      const start = parseDate(e.start_time);
+      const end = parseDate(e.end_time);
+      if (!start || !end) return null;
+      const adjustedStart = adjustExternalDate(start, homeTimezone, activeTimezoneMode);
+      const adjustedEnd = adjustExternalDate(end, homeTimezone, activeTimezoneMode);
+      return { uid: e.uid, title: e.title, start: adjustedStart, end: adjustedEnd };
+    }).filter(Boolean);
+
+
+    const currentConflicts = new Set();
+
+    // Find overlaps and alert
+    parsedEvents.forEach(e => {
+      activeTasks.forEach(t => {
+        if (t.start < e.end && t.end > e.start) {
+          const conflictKey = `${t.id}-${e.uid}`;
+          currentConflicts.add(conflictKey);
+
+          if (!notifiedConflictsRef.current.has(conflictKey)) {
+            notifiedConflictsRef.current.add(conflictKey);
+
+            const msgTitle = `⚠️ Conflicto detectado en Outlook`;
+            const msgBody = `Tu tarea "${t.title}" se cruza con "${e.title}".`;
+            
+            // 1. Desktop Notification
+            sendNotification(msgTitle, msgBody);
+            
+            // 2. Custom App Toast Alert
+            showToast(msgTitle, msgBody, 'warning');
+          }
+        }
+      });
+    });
+
+    // Clean up resolved conflicts from the notified set
+    notifiedConflictsRef.current.forEach(key => {
+      if (!currentConflicts.has(key)) {
+        notifiedConflictsRef.current.delete(key);
+      }
+    });
+  }, [tasks, externalEvents]);
 
   const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
   const inboxListId = inboxList ? inboxList.id : null;
@@ -814,6 +934,38 @@ function App() {
     }
   };
 
+  const handleAddTask = async (taskData) => {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskData)
+      });
+      if (res.ok) {
+        fetchTasks();
+        fetchTags();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateTask = async (taskId, updatedFields) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFields)
+      });
+      if (res.ok) {
+        fetchTasks();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+
   const handleUpdateTaskList = async (taskId, listId) => {
     try {
       await fetch(`/api/tasks/${taskId}`, {
@@ -843,11 +995,17 @@ function App() {
   const fetchTasks = async () => {
     try {
       const res = await fetch('/api/tasks');
-      const data = await res.json();
-      setTasks(data);
+      if (res.ok) {
+        const data = await res.json();
+        setTasks(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Failed to fetch tasks:', res.statusText);
+        setTasks([]);
+      }
       fetchTags();
     } catch (err) {
       console.error(err);
+      setTasks([]);
     }
   };
 
@@ -856,10 +1014,13 @@ function App() {
       const res = await fetch('/api/tags');
       if (res.ok) {
         const data = await res.json();
-        setTags(data);
+        setTags(Array.isArray(data) ? data : []);
+      } else {
+        setTags([]);
       }
     } catch (err) {
       console.error(err);
+      setTags([]);
     }
   };
 
@@ -868,31 +1029,44 @@ function App() {
       const res = await fetch('/api/list-groups');
       if (res.ok) {
         const data = await res.json();
-        setListGroups(data);
+        setListGroups(Array.isArray(data) ? data : []);
+      } else {
+        setListGroups([]);
       }
     } catch (err) {
       console.error(err);
+      setListGroups([]);
     }
   };
 
   const fetchLists = async () => {
     try {
       const res = await fetch('/api/lists');
-      const data = await res.json();
-      setLists(data);
+      if (res.ok) {
+        const data = await res.json();
+        setLists(Array.isArray(data) ? data : []);
+      } else {
+        setLists([]);
+      }
       fetchListGroups();
     } catch (err) {
       console.error(err);
+      setLists([]);
     }
   };
 
   const fetchSections = async () => {
     try {
       const res = await fetch('/api/sections');
-      const data = await res.json();
-      setSections(data);
+      if (res.ok) {
+        const data = await res.json();
+        setSections(Array.isArray(data) ? data : []);
+      } else {
+        setSections([]);
+      }
     } catch (err) {
       console.error(err);
+      setSections([]);
     }
   };
 
@@ -1141,6 +1315,18 @@ function App() {
     }
   };
 
+  const handleDeleteSubtask = async (id) => {
+    try {
+      const res = await fetch(`/api/subtasks/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (selectedSubtaskId === id) setSelectedSubtaskId(null);
+        fetchTasks();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleQuickAdd = async (e, overrideTitle) => {
     if (e && e.preventDefault) e.preventDefault();
     const titleToUse = typeof overrideTitle === 'string' ? overrideTitle : quickAddTitle;
@@ -1286,9 +1472,17 @@ function App() {
               tasks={tasks} 
               lists={lists} 
               externalEvents={externalEvents}
+              externalEventsError={externalEventsError}
+              onRetrySync={() => fetchExternalEvents()}
               onSelectEvent={handleSelectEvent} 
               onUpdateEvent={handleUpdateEventDates}
+              homeTimezone={homeTimezone}
+              activeTimezoneMode={activeTimezoneMode}
+              onAddTask={handleAddTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
             />
+
           ) : mainView === 'pomodoro' ? (
             <PomodoroView tasks={tasks} />
           ) : mainView === 'eisenhower' ? (
@@ -1317,23 +1511,17 @@ function App() {
                 task={selectedTask}
                 subtask={selectedSubtask}
                 sections={sections}
+                allTasks={tasks}
+                externalEvents={externalEvents}
                 onClose={() => {
                   setSelectedTaskId(null);
                   setSelectedSubtaskId(null);
                 }}
                 onUpdate={fetchTasks}
                 onDelete={handleDeleteTask}
-                onDeleteSubtask={async (id) => {
-                  try {
-                    const res = await fetch(`/api/subtasks/${id}`, { method: 'DELETE' });
-                    if (res.ok) {
-                      setSelectedSubtaskId(null);
-                      fetchTasks();
-                    }
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
+                onDeleteSubtask={handleDeleteSubtask}
+                homeTimezone={homeTimezone}
+                activeTimezoneMode={activeTimezoneMode}
               />
             </div>
           </div>
@@ -1342,8 +1530,57 @@ function App() {
     );
   }
 
+  const browserOffset = -new Date().getTimezoneOffset();
+  const homeOffset = parseTimezoneOffset(homeTimezone);
+  const showTimezoneBanner = !dismissedTimezoneBanner && 
+                             homeTimezone !== 'browser' && 
+                             homeOffset !== browserOffset && 
+                             acknowledgedTimezone !== String(browserOffset);
+
   return (
     <div className="root-layout">
+      {showTimezoneBanner && (
+        <div className="timezone-banner">
+          <div className="timezone-banner-text">
+            <span style={{ fontSize: '1.1rem' }}>✈️</span>
+            <span>
+              ¿Cambiaste de huso horario? Estás visualizando en la hora de tu Casa (
+              <b>{homeTimezone}</b>).
+            </span>
+          </div>
+          <div className="timezone-banner-actions">
+            <button 
+              className="timezone-action-btn primary"
+              onClick={() => {
+                setActiveTimezoneMode('local');
+                localStorage.setItem('activeTimezoneMode', 'local');
+                localStorage.setItem('acknowledgedTimezoneOffset', String(browserOffset));
+                setAcknowledgedTimezone(String(browserOffset));
+              }}
+            >
+              Actualizar a hora local (UTC{browserOffset >= 0 ? `+${browserOffset / 60}` : browserOffset / 60})
+            </button>
+            <button 
+              className="timezone-action-btn secondary"
+              onClick={() => {
+                setActiveTimezoneMode('home');
+                localStorage.setItem('activeTimezoneMode', 'home');
+                localStorage.setItem('acknowledgedTimezoneOffset', String(browserOffset));
+                setAcknowledgedTimezone(String(browserOffset));
+              }}
+            >
+              Mantener hora de casa
+            </button>
+            <button 
+              className="timezone-banner-close"
+              onClick={() => setDismissedTimezoneBanner(true)}
+              title="Cerrar"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
       <GlobalSidebar 
         mainView={mainView} 
         setMainView={setMainView} 
@@ -1355,6 +1592,7 @@ function App() {
           setUser(null);
         }}
       />
+
       
       <div className="app-container">
         {mainView === 'tasks' && (
@@ -1924,9 +2162,17 @@ function App() {
               tasks={tasks} 
               lists={lists} 
               externalEvents={externalEvents}
+              externalEventsError={externalEventsError}
+              onRetrySync={() => fetchExternalEvents()}
               onSelectEvent={handleSelectEvent} 
               onUpdateEvent={handleUpdateEventDates}
+              homeTimezone={homeTimezone}
+              activeTimezoneMode={activeTimezoneMode}
+              onAddTask={handleAddTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
             />
+
           ) : mainView === 'pomodoro' ? (
             <PomodoroView tasks={tasks} />
           ) : mainView === 'eisenhower' ? (
@@ -1964,8 +2210,14 @@ function App() {
                   setOutlookIcalUrl(url);
                   fetchExternalEvents(url);
                 }
+                const hz = localStorage.getItem('homeTimezone') || 'browser';
+                setHomeTimezone(hz);
+                localStorage.removeItem('acknowledgedTimezoneOffset');
+                setAcknowledgedTimezone('');
+                setDismissedTimezoneBanner(false);
               }}
             />
+
           ) : mainView === 'admin' ? (
             <AdminView />
           ) : mainView === 'shared' ? (
@@ -1988,23 +2240,17 @@ function App() {
               task={selectedTask}
               subtask={selectedSubtask}
               sections={sections}
+              allTasks={tasks}
+              externalEvents={externalEvents}
               onClose={() => {
                 setSelectedTaskId(null);
                 setSelectedSubtaskId(null);
               }}
               onUpdate={fetchTasks}
               onDelete={handleDeleteTask}
-              onDeleteSubtask={async (id) => {
-                try {
-                  const res = await fetch(`/api/subtasks/${id}`, { method: 'DELETE' });
-                  if (res.ok) {
-                    setSelectedSubtaskId(null);
-                    fetchTasks();
-                  }
-                } catch (err) {
-                  console.error(err);
-                }
-              }}
+              onDeleteSubtask={handleDeleteSubtask}
+              homeTimezone={homeTimezone}
+              activeTimezoneMode={activeTimezoneMode}
             />
           </aside>
         )}
@@ -2165,6 +2411,21 @@ function App() {
             }
           }}
         />
+
+        {/* Toast Container for in-app popups */}
+        <div className="toast-container">
+          {toasts.map(toast => (
+            <div key={toast.id} className={`custom-toast ${toast.type}`}>
+              <div className="toast-header">
+                <span>{toast.title}</span>
+                <button className="toast-close-btn" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="toast-body">{toast.message}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

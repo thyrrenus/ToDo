@@ -3,8 +3,9 @@ import { Trash2, Check, ChevronDown, ChevronRight, Edit2, X, Calendar as Calenda
 import { RichTextEditor } from './RichTextEditor';
 import { format, parseISO, addDays, startOfWeek, endOfWeek, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { runAITask } from '../utils/aiManager';
+import { adjustExternalDate } from '../utils/timezone';
 
-export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, onDelete, onDeleteSubtask }) {
+export function TaskDetail({ task, subtask, sections = [], allTasks = [], externalEvents = [], onClose, onUpdate, onDelete, onDeleteSubtask, homeTimezone, activeTimezoneMode }) {
   const isSubtaskMode = !!subtask;
   const currentItem = isSubtaskMode ? subtask : task;
 
@@ -221,6 +222,13 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
   const [activeTab, setActiveTab] = useState('date'); // 'date' or 'duration'
   const [allDay, setAllDay] = useState(!currentItem?.start_time);
   
+  // Custom picker state for hours and minutes
+  const [hasTime, setHasTime] = useState(false);
+  const [startHourState, setStartHourState] = useState('09');
+  const [startMinState, setStartMinState] = useState('00');
+  const [endHourState, setEndHourState] = useState('10');
+  const [endMinState, setEndMinState] = useState('00');
+
   // Popover calendar states
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
 
@@ -234,15 +242,59 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
     if (subtask) {
       setSectionId('');
       setDueDate(subtask.due_date ? formatDateForInput(subtask.due_date) : '');
-      setStartTime(subtask.start_time ? formatDateTimeForInput(subtask.start_time) : '');
-      setEndTime(subtask.end_time ? formatDateTimeForInput(subtask.end_time) : '');
+      const sTime = subtask.start_time ? formatDateTimeForInput(subtask.start_time) : '';
+      const eTime = subtask.end_time ? formatDateTimeForInput(subtask.end_time) : '';
+      setStartTime(sTime);
+      setEndTime(eTime);
       setAllDay(!subtask.start_time);
+
+      if (sTime && sTime.includes('T')) {
+        const time = sTime.split('T')[1];
+        setStartHourState(time.substring(0, 2));
+        setStartMinState(time.substring(3, 5));
+        setHasTime(true);
+      } else {
+        setStartHourState('09');
+        setStartMinState('00');
+        setHasTime(false);
+      }
+
+      if (eTime && eTime.includes('T')) {
+        const time = eTime.split('T')[1];
+        setEndHourState(time.substring(0, 2));
+        setEndMinState(time.substring(3, 5));
+      } else {
+        setEndHourState('10');
+        setEndMinState('00');
+      }
     } else if (task) {
       setSectionId(task.section_id || '');
       setDueDate(task.due_date ? formatDateForInput(task.due_date) : '');
-      setStartTime(task.start_time ? formatDateTimeForInput(task.start_time) : '');
-      setEndTime(task.end_time ? formatDateTimeForInput(task.end_time) : '');
+      const sTime = task.start_time ? formatDateTimeForInput(task.start_time) : '';
+      const eTime = task.end_time ? formatDateTimeForInput(task.end_time) : '';
+      setStartTime(sTime);
+      setEndTime(eTime);
       setAllDay(!task.start_time);
+
+      if (sTime && sTime.includes('T')) {
+        const time = sTime.split('T')[1];
+        setStartHourState(time.substring(0, 2));
+        setStartMinState(time.substring(3, 5));
+        setHasTime(true);
+      } else {
+        setStartHourState('09');
+        setStartMinState('00');
+        setHasTime(false);
+      }
+
+      if (eTime && eTime.includes('T')) {
+        const time = eTime.split('T')[1];
+        setEndHourState(time.substring(0, 2));
+        setEndMinState(time.substring(3, 5));
+      } else {
+        setEndHourState('10');
+        setEndMinState('00');
+      }
     }
   }, [task, subtask]);
 
@@ -342,13 +394,13 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
   };
 
   const getFormattedDateDisplay = () => {
-    if (startTime && endTime) {
+    if (startTime && endTime && startTime !== endTime) {
       try {
         const startParsed = parseISO(startTime);
         const endParsed = parseISO(endTime);
         return `${format(startParsed, 'MMM d')} - ${format(endParsed, 'MMM d')}`;
       } catch (e) {
-        return 'Select Dates';
+        // ignore
       }
     }
     if (dueDate) {
@@ -422,29 +474,185 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
 
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
     setDueDate(formattedDate);
-    setStartTime('');
-    setEndTime('');
-    handleUpdate({ due_date: formattedDate, start_time: null, end_time: null });
+    const newStartStr = hasTime ? `${formattedDate}T${startHourState}:${startMinState}` : formattedDate;
+    setStartTime(newStartStr);
+    setEndTime(newStartStr);
+    handleUpdate({ due_date: formattedDate, start_time: newStartStr, end_time: newStartStr });
   };
 
   const handleCalendarDayClick = (dateObj) => {
     const formattedDate = format(dateObj, 'yyyy-MM-dd');
-    setDueDate(formattedDate);
-    setStartTime('');
-    setEndTime('');
-    handleUpdate({ due_date: formattedDate, start_time: null, end_time: null });
+    if (activeTab === 'date') {
+      setDueDate(formattedDate);
+      if (hasTime) {
+        const newStart = `${formattedDate}T${startHourState}:${startMinState}`;
+        // Preserve range duration shift if range exists
+        if (startTime && endTime) {
+          try {
+            const startD = parseISO(startTime.includes('T') ? startTime : `${startTime}T00:00`);
+            const endD = parseISO(endTime.includes('T') ? endTime : `${endTime}T00:00`);
+            const diffMs = endD.getTime() - startD.getTime();
+            const newStartD = parseISO(newStart);
+            const newEndD = new Date(newStartD.getTime() + diffMs);
+            const newEnd = `${format(newEndD, 'yyyy-MM-dd')}T${endHourState}:${endMinState}`;
+            setStartTime(newStart);
+            setEndTime(newEnd);
+          } catch (e) {
+            setStartTime(newStart);
+            setEndTime(`${formattedDate}T${endHourState}:${endMinState}`);
+          }
+        } else {
+          setStartTime(newStart);
+          setEndTime(`${formattedDate}T${endHourState}:${endMinState}`);
+        }
+      } else {
+        // If hasTime is disabled, set date-only strings
+        if (startTime && endTime) {
+          try {
+            const startD = parseISO(startTime.includes('T') ? startTime.split('T')[0] : startTime);
+            const endD = parseISO(endTime.includes('T') ? endTime.split('T')[0] : endTime);
+            const diffMs = endD.getTime() - startD.getTime();
+            const newStartD = parseISO(formattedDate);
+            const newEndD = new Date(newStartD.getTime() + diffMs);
+            const newEnd = format(newEndD, 'yyyy-MM-dd');
+            setStartTime(formattedDate);
+            setEndTime(newEnd);
+          } catch (e) {
+            setStartTime(formattedDate);
+            setEndTime(formattedDate);
+          }
+        } else {
+          setStartTime(formattedDate);
+          setEndTime(formattedDate);
+        }
+      }
+    } else {
+      // Duration range selection
+      const currentStartDateStr = startTime ? (startTime.includes('T') ? startTime.split('T')[0] : startTime) : '';
+      const currentEndDateStr = endTime ? (endTime.includes('T') ? endTime.split('T')[0] : endTime) : '';
+      
+      if (!currentStartDateStr || (currentStartDateStr && currentEndDateStr)) {
+        // Set new start date, clear end date
+        const newStart = allDay ? formattedDate : `${formattedDate}T${startHourState}:${startMinState}`;
+        setStartTime(newStart);
+        setEndTime('');
+        // Sync dueDate
+        setDueDate(formattedDate);
+      } else {
+        // Start date exists, set end date
+        if (formattedDate >= currentStartDateStr) {
+          const newEnd = allDay ? formattedDate : `${formattedDate}T${endHourState}:${endMinState}`;
+          setEndTime(newEnd);
+          // Keep dueDate as the start date of range
+          setDueDate(currentStartDateStr);
+        } else {
+          // If clicked date is before start date, it becomes the new start date
+          const newStart = allDay ? formattedDate : `${formattedDate}T${startHourState}:${startMinState}`;
+          setStartTime(newStart);
+          setEndTime('');
+          // Sync dueDate
+          setDueDate(formattedDate);
+        }
+      }
+    }
+  };
+
+  const handleTimeChange = (h, m) => {
+    setStartHourState(h);
+    setStartMinState(m);
+    const datePart = dueDate || format(new Date(), 'yyyy-MM-dd');
+    const newStart = `${datePart}T${h}:${m}`;
+    setStartTime(newStart);
+    if (endTime) {
+      try {
+        const startD = parseISO(startTime.includes('T') ? startTime : `${startTime}T00:00`);
+        const endD = parseISO(endTime.includes('T') ? endTime : `${endTime}T00:00`);
+        const diffMs = endD.getTime() - startD.getTime();
+        const newStartD = parseISO(newStart);
+        const newEndD = new Date(newStartD.getTime() + diffMs);
+        setEndTime(`${format(newEndD, 'yyyy-MM-dd')}T${endHourState}:${endMinState}`);
+      } catch (e) {
+        setEndTime(`${datePart}T${endHourState}:${endMinState}`);
+      }
+    } else {
+      const hourNum = parseInt(h);
+      const nextHour = String((hourNum + 1) % 24).padStart(2, '0');
+      setEndTime(`${datePart}T${nextHour}:${m}`);
+    }
+  };
+
+  const handleStartTimeChange = (h, m) => {
+    setStartHourState(h);
+    setStartMinState(m);
+    const datePart = startTime ? (startTime.includes('T') ? startTime.split('T')[0] : startTime) : format(new Date(), 'yyyy-MM-dd');
+    setStartTime(`${datePart}T${h}:${m}`);
+  };
+
+  const handleEndTimeChange = (h, m) => {
+    setEndHourState(h);
+    setEndMinState(m);
+    const datePart = endTime ? (endTime.includes('T') ? endTime.split('T')[0] : endTime) : (startTime ? (startTime.includes('T') ? startTime.split('T')[0] : startTime) : format(new Date(), 'yyyy-MM-dd'));
+    setEndTime(`${datePart}T${h}:${m}`);
+  };
+
+  const handleAllDayToggle = (isAllDay) => {
+    setAllDay(isAllDay);
+    setHasTime(!isAllDay);
+    if (isAllDay) {
+      if (startTime) setStartTime(startTime.split('T')[0]);
+      if (endTime) setEndTime(endTime.split('T')[0]);
+    } else {
+      const sDate = startTime ? (startTime.includes('T') ? startTime.split('T')[0] : startTime) : (dueDate || format(new Date(), 'yyyy-MM-dd'));
+      const eDate = endTime ? (endTime.includes('T') ? endTime.split('T')[0] : endTime) : sDate;
+      setStartTime(`${sDate}T${startHourState}:${startMinState}`);
+      setEndTime(`${eDate}T${endHourState}:${endMinState}`);
+    }
   };
 
   const handleApplyDuration = () => {
-    if (startTime && endTime) {
-      // Auto compute due_date to start date for compatibility
-      const derivedDueDate = startTime.split('T')[0];
-      setDueDate(derivedDueDate);
-      handleUpdate({
-        due_date: derivedDueDate,
-        start_time: startTime,
-        end_time: endTime
-      });
+    if (activeTab === 'date') {
+      if (dueDate) {
+        let finalStartTime = null;
+        let finalEndTime = null;
+        if (hasTime) {
+          finalStartTime = `${dueDate}T${startHourState}:${startMinState}`;
+          if (endTime && (endTime.startsWith(dueDate) || endTime.includes('T'))) {
+            finalEndTime = endTime;
+          } else {
+            const hourNum = parseInt(startHourState);
+            const nextHour = String((hourNum + 1) % 24).padStart(2, '0');
+            const nextDayOffset = hourNum + 1 >= 24;
+            let finalEndDay = dueDate;
+            if (nextDayOffset) {
+              try {
+                finalEndDay = format(addDays(parseISO(dueDate), 1), 'yyyy-MM-dd');
+              } catch (e) {}
+            }
+            finalEndTime = `${finalEndDay}T${nextHour}:${startMinState}`;
+          }
+        } else {
+          finalStartTime = dueDate;
+          finalEndTime = dueDate;
+        }
+        setStartTime(finalStartTime);
+        setEndTime(finalEndTime);
+        handleUpdate({
+          due_date: dueDate,
+          start_time: finalStartTime,
+          end_time: finalEndTime
+        });
+      }
+    } else {
+      // duration range mode
+      if (startTime) {
+        const derivedDueDate = startTime.split('T')[0];
+        setDueDate(derivedDueDate);
+        handleUpdate({
+          due_date: derivedDueDate,
+          start_time: startTime,
+          end_time: endTime || null
+        });
+      }
     }
     setShowDatePicker(false);
   };
@@ -453,6 +661,7 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
     setDueDate('');
     setStartTime('');
     setEndTime('');
+    setHasTime(false);
     handleUpdate({
       due_date: null,
       start_time: null,
@@ -461,9 +670,107 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
     setShowDatePicker(false);
   };
 
+  const renderTimeSelector = (hourVal, minVal, onHourChange, onMinChange) => {
+    const hoursArray = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+    const minutesArray = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
+    return (
+      <div className="custom-time-picker">
+        <select 
+          value={hourVal} 
+          onChange={(e) => onHourChange(e.target.value)}
+          className="time-select"
+        >
+          {hoursArray.map(h => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <span className="time-separator">:</span>
+        <select 
+          value={minVal} 
+          onChange={(e) => onMinChange(e.target.value)}
+          className="time-select"
+        >
+          {minutesArray.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
   const calendarDays = generateCalendarDays();
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const subtasks = task?.subtasks || [];
+
+  const getScheduleConflict = () => {
+    const currentItem = subtask || task;
+    if (!currentItem || currentItem.is_completed) return null;
+
+    if (!startTime || !endTime) return null;
+
+    const parseDate = (dStr) => {
+      if (!dStr) return null;
+      try {
+        const d = parseISO(dStr);
+        return isNaN(d.getTime()) ? null : d;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const currentStart = parseDate(startTime);
+    const currentEnd = parseDate(endTime);
+    if (!currentStart || !currentEnd) return null;
+
+    // 1. Check other tasks
+    for (const t of (allTasks || [])) {
+      // Skip current task
+      if (!subtask && task && t.id === task.id) continue;
+      if (t.is_completed) continue;
+
+      const tStart = parseDate(t.start_time);
+      const tEnd = parseDate(t.end_time);
+      if (tStart && tEnd) {
+        if (currentStart < tEnd && currentEnd > tStart) {
+          return { title: t.title, type: 'tarea' };
+        }
+      }
+
+      // Check subtasks of this task
+      if (t.subtasks && Array.isArray(t.subtasks)) {
+        for (const st of t.subtasks) {
+          if (subtask && st.id === subtask.id) continue;
+          if (st.is_completed) continue;
+
+          const stStart = parseDate(st.start_time);
+          const stEnd = parseDate(st.end_time);
+          if (stStart && stEnd) {
+            if (currentStart < stEnd && currentEnd > stStart) {
+              return { title: st.title, type: 'subtarea' };
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Check external Outlook events
+    for (const e of (externalEvents || [])) {
+      const eStart = parseDate(e.start_time);
+      const eEnd = parseDate(e.end_time);
+      if (eStart && eEnd) {
+        const adjustedStart = adjustExternalDate(eStart, homeTimezone, activeTimezoneMode);
+        const adjustedEnd = adjustExternalDate(eEnd, homeTimezone, activeTimezoneMode);
+        if (currentStart < adjustedEnd && currentEnd > adjustedStart) {
+          return { title: e.title, type: 'Outlook' };
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const conflict = getScheduleConflict();
 
   return (
     <div className="task-detail-pane">
@@ -488,7 +795,29 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
         />
 
         {(task || subtask) && (
-          <div className="date-reminder-wrapper" ref={popoverRef}>
+          <>
+            {conflict && (
+              <div className="schedule-conflict-banner" style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '1rem',
+                color: '#ef4444',
+                fontSize: '0.82rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backdropFilter: 'blur(8px)',
+                animation: 'slideDownFade 0.25s ease'
+              }}>
+                <span>⚠️</span>
+                <div style={{ flex: 1 }}>
+                  <strong>Conflicto de horario:</strong> Se cruza con la {conflict.type} <em>"{conflict.title}"</em>.
+                </div>
+              </div>
+            )}
+            <div className="date-reminder-wrapper" ref={popoverRef}>
             <button 
               className={`date-reminder-trigger-btn ${dueDate || startTime ? 'has-date' : ''}`}
               onClick={() => setShowDatePicker(!showDatePicker)}
@@ -505,17 +834,76 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
                     className={`popover-tab-btn ${activeTab === 'date' ? 'active' : ''}`}
                     onClick={() => setActiveTab('date')}
                   >
-                    Date
+                    Fecha
                   </button>
                   <button 
                     className={`popover-tab-btn ${activeTab === 'duration' ? 'active' : ''}`}
                     onClick={() => setActiveTab('duration')}
                   >
-                    Duration
+                    Duración
                   </button>
                 </div>
 
                 <div className="popover-body">
+                  {/* Shared Calendar Header */}
+                  <div className="mini-calendar-header">
+                    <span>{monthNames[currentCalendarDate.getMonth()]} {currentCalendarDate.getFullYear()}</span>
+                    <div className="mini-calendar-nav">
+                      <button 
+                        className="nav-arrow-btn"
+                        onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1))}
+                      >
+                        &lt;
+                      </button>
+                      <button 
+                        className="nav-arrow-btn"
+                        onClick={() => setCurrentCalendarDate(new Date())}
+                      >
+                        o
+                      </button>
+                      <button 
+                        className="nav-arrow-btn"
+                        onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1))}
+                      >
+                        &gt;
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Weekday Names */}
+                  <div className="weekday-labels">
+                    <span>D</span><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span>
+                  </div>
+
+                  {/* Mini Calendar Grid (supports single select and range select highlights) */}
+                  <div className="mini-calendar-grid" style={{ marginBottom: '0.75rem' }}>
+                    {calendarDays.map((dayObj, index) => {
+                      const formattedCompare = format(dayObj.date, 'yyyy-MM-dd');
+                      const currentStartDateStr = startTime ? startTime.split('T')[0] : '';
+                      const currentEndDateStr = endTime ? endTime.split('T')[0] : '';
+
+                      const isRangeStart = activeTab === 'duration' && currentStartDateStr === formattedCompare;
+                      const isRangeEnd = activeTab === 'duration' && currentEndDateStr === formattedCompare;
+                      const isRangeBetween = activeTab === 'duration' && currentStartDateStr && currentEndDateStr && 
+                                             formattedCompare > currentStartDateStr && formattedCompare < currentEndDateStr;
+
+                      const isSelected = activeTab === 'date' 
+                        ? (dueDate === formattedCompare) 
+                        : (isRangeStart || isRangeEnd);
+
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => handleCalendarDayClick(dayObj.date)}
+                          className={`calendar-grid-day ${!dayObj.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''} ${isRangeStart ? 'range-start' : ''} ${isRangeEnd ? 'range-end' : ''} ${isRangeBetween ? 'range-between' : ''}`}
+                        >
+                          {dayObj.day}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tab-Specific Options */}
                   {activeTab === 'date' ? (
                     <div className="date-tab-content">
                       {/* Quick Select Panel */}
@@ -538,112 +926,106 @@ export function TaskDetail({ task, subtask, sections = [], onClose, onUpdate, on
                         </button>
                       </div>
 
-                      {/* Mini Month Picker */}
-                      <div className="mini-calendar-header">
-                        <span>{monthNames[currentCalendarDate.getMonth()]} {currentCalendarDate.getFullYear()}</span>
-                        <div className="mini-calendar-nav">
-                          <button 
-                            className="nav-arrow-btn"
-                            onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1))}
-                          >
-                            &lt;
-                          </button>
-                          <button 
-                            className="nav-arrow-btn"
-                            onClick={() => setCurrentCalendarDate(new Date())}
-                          >
-                            o
-                          </button>
-                          <button 
-                            className="nav-arrow-btn"
-                            onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1))}
-                          >
-                            &gt;
-                          </button>
+                      {/* Time Selector Row */}
+                      <div className="time-selector-row">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>🕒 Definir hora:</span>
+                          <label className="toggle-switch">
+                            <input 
+                              type="checkbox" 
+                              checked={hasTime}
+                              onChange={(e) => {
+                                setHasTime(e.target.checked);
+                                if (e.target.checked) {
+                                  setStartTime(`${dueDate || format(new Date(), 'yyyy-MM-dd')}T${startHourState}:${startMinState}`);
+                                } else {
+                                  setStartTime('');
+                                  setEndTime('');
+                                }
+                              }}
+                            />
+                            <span className="slider round"></span>
+                          </label>
                         </div>
-                      </div>
-
-                      {/* Weekday Names */}
-                      <div className="weekday-labels">
-                        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-                      </div>
-
-                      {/* Mini Calendar Grid */}
-                      <div className="mini-calendar-grid">
-                        {calendarDays.map((dayObj, index) => {
-                          const formattedCompare = format(dayObj.date, 'yyyy-MM-dd');
-                          const isSelected = dueDate === formattedCompare;
-                          return (
-                            <button
-                              key={index}
-                              onClick={() => handleCalendarDayClick(dayObj.date)}
-                              className={`calendar-grid-day ${!dayObj.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''}`}
-                            >
-                              {dayObj.day}
-                            </button>
-                          );
-                        })}
+                        {hasTime && renderTimeSelector(
+                          startHourState, 
+                          startMinState, 
+                          (h) => handleTimeChange(h, startMinState), 
+                          (m) => handleTimeChange(startHourState, m)
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <div className="duration-tab-content">
-                      <div className="duration-field">
-                        <label>Start</label>
-                        <input 
-                          type={allDay ? "date" : "datetime-local"} 
-                          value={allDay ? startTime.split('T')[0] : startTime}
-                          onChange={(e) => setStartTime(e.target.value)}
-                          className="duration-input"
-                        />
-                      </div>
-                      
-                      <div className="duration-field">
-                        <label>End</label>
-                        <input 
-                          type={allDay ? "date" : "datetime-local"}
-                          value={allDay ? endTime.split('T')[0] : endTime}
-                          onChange={(e) => setEndTime(e.target.value)}
-                          className="duration-input"
-                        />
+                    <div className="duration-tab-content" style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
+                      {/* Resumen de Rango */}
+                      <div className="duration-range-summary" style={{ background: 'rgba(0,0,0,0.15)', borderRadius: '8px', padding: '10px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>📅 Inicio:</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                            {startTime ? format(parseISO(startTime), 'dd MMM yyyy') : '--'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>📅 Fin:</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                            {endTime ? format(parseISO(endTime), 'dd MMM yyyy') : '--'}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="all-day-toggle-row">
-                        <span>All Day</span>
+                      {/* All Day Toggle */}
+                      <div className="all-day-toggle-row" style={{ marginBottom: '12px' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>🕒 Todo el día</span>
                         <label className="toggle-switch">
                           <input 
                             type="checkbox" 
                             checked={allDay}
-                            onChange={(e) => {
-                              setAllDay(e.target.checked);
-                              // Format date values accordingly
-                              if (e.target.checked) {
-                                if (startTime) setStartTime(startTime.split('T')[0]);
-                                if (endTime) setEndTime(endTime.split('T')[0]);
-                              } else {
-                                if (startTime && !startTime.includes('T')) setStartTime(`${startTime}T09:00`);
-                                if (endTime && !endTime.includes('T')) setEndTime(`${endTime}T18:00`);
-                              }
-                            }}
+                            onChange={(e) => handleAllDayToggle(e.target.checked)}
                           />
                           <span className="slider round"></span>
                         </label>
                       </div>
+
+                      {/* Custom Time Selection (if not all day) */}
+                      {!allDay && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Hora de Inicio:</span>
+                            {renderTimeSelector(
+                              startHourState, 
+                              startMinState, 
+                              (h) => handleStartTimeChange(h, startMinState), 
+                              (m) => handleStartTimeChange(startHourState, m)
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Hora de Fin:</span>
+                            {renderTimeSelector(
+                              endHourState, 
+                              endMinState, 
+                              (h) => handleEndTimeChange(h, endMinState), 
+                              (m) => handleEndTimeChange(endHourState, m)
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* Actions */}
-                  <div className="popover-actions">
+                  <div className="popover-actions" style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                     <button className="popover-action-btn ok-btn" onClick={handleApplyDuration}>
                       OK
                     </button>
                     <button className="popover-action-btn clear-btn" onClick={handleClearDates}>
-                      Clear
+                      Limpiar
                     </button>
                   </div>
                 </div>
               </div>
             )}
           </div>
+          </>
         )}
 
         {!isSubtaskMode && task && sections.filter(s => s.list_id === task.list_id).length > 0 && (

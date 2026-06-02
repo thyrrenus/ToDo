@@ -220,6 +220,8 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
   const [enableTaskAlerts, setEnableTaskAlerts] = useState(() => localStorage.getItem('enableTaskAlerts') !== 'false');
   const [enablePomodoroAlerts, setEnablePomodoroAlerts] = useState(() => localStorage.getItem('enablePomodoroAlerts') !== 'false');
   const [aiModelSelected, setAiModelSelected] = useState(() => localStorage.getItem('aiModelSelected') || 'Xenova/LaMini-Flan-T5-248M');
+  const [homeTimezone, setHomeTimezone] = useState(() => localStorage.getItem('homeTimezone') || 'browser');
+
 
 
   const handleRequestPermission = async () => {
@@ -320,6 +322,8 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
     localStorage.setItem('enablePomodoroAlerts', enablePomodoroAlerts ? 'true' : 'false');
     localStorage.setItem('aiModelSelected', aiModelSelected);
     localStorage.setItem('agenda_voice_name', selectedVoiceName);
+    localStorage.setItem('homeTimezone', homeTimezone);
+
 
 
     setSaveSuccess(true);
@@ -1267,8 +1271,77 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
           </div>
         </div>
 
+        {/* Card 8: Anclaje de Zona Horaria (Home Timezone) */}
+        <div style={{
+          background: isLightTheme ? '#ffffff' : '#151518',
+          border: isLightTheme ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.04)',
+          borderRadius: '16px',
+          padding: '1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.25rem',
+          boxShadow: isLightTheme ? '0 4px 12px rgba(0,0,0,0.04)' : '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: isLightTheme ? '#1f2937' : '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: isLightTheme ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.04)', paddingBottom: '8px' }}>
+            <span style={{ fontSize: '1.2rem', color: 'var(--accent-hover)' }}>🌐</span>
+            Anclaje de Zona Horaria (Home Timezone)
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.8rem', color: isLightTheme ? '#4b5563' : '#a1a1aa', fontWeight: 600 }}>Zona Horaria de Casa:</label>
+            <p style={{ fontSize: '0.7rem', color: isLightTheme ? '#6b7280' : '#71717a', lineHeight: 1.35 }}>
+              Define tu zona horaria base. Si viajas y tu equipo cambia de huso horario, la aplicación detectará el cambio y te permitirá mantener la hora de casa en el calendario.
+            </p>
+            <select
+              value={homeTimezone}
+              onChange={(e) => setHomeTimezone(e.target.value)}
+              style={{
+                background: isLightTheme ? '#ffffff' : '#1a1a1a',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                outline: 'none',
+                marginTop: '6px'
+              }}
+            >
+              <option value="browser">Detectar automáticamente (Hora del Navegador)</option>
+              <option value="UTC-12">UTC-12</option>
+              <option value="UTC-11">UTC-11</option>
+              <option value="UTC-10">UTC-10 (Hawái)</option>
+              <option value="UTC-9">UTC-9 (Alaska)</option>
+              <option value="UTC-8">UTC-8 (Pacífico - LA/Vancouver)</option>
+              <option value="UTC-7">UTC-7 (Montaña - Denver)</option>
+              <option value="UTC-6">UTC-6 (Central - CDMX/Chicago)</option>
+              <option value="UTC-5">UTC-5 (Bogotá/Lima/Nueva York)</option>
+              <option value="UTC-4">UTC-4 (Santiago/Caracas)</option>
+              <option value="UTC-3">UTC-3 (Buenos Aires/São Paulo)</option>
+              <option value="UTC-2">UTC-2</option>
+              <option value="UTC-1">UTC-1</option>
+              <option value="UTC+0">UTC+0 (Londres/GMT)</option>
+              <option value="UTC+1">UTC+1 (Madrid/París/Berlín)</option>
+              <option value="UTC+2">UTC+2 (Atenas/El Cairo/Sudáfrica)</option>
+              <option value="UTC+3">UTC+3 (Moscú/Estambul/Bagdad)</option>
+              <option value="UTC+4">UTC+4 (Dubái/Bakú/Tbilisi)</option>
+              <option value="UTC+5">UTC+5 (Karachi/Tashkent)</option>
+              <option value="UTC+5.5">UTC+5:30 (Nueva Delhi/Mumbai)</option>
+              <option value="UTC+6">UTC+6 (Almaty/Dhaka)</option>
+              <option value="UTC+7">UTC+7 (Bangkok/Yakarta)</option>
+              <option value="UTC+8">UTC+8 (Pekín/Singapur/Perth)</option>
+              <option value="UTC+9">UTC+9 (Tokio/Seúl)</option>
+              <option value="UTC+9.5">UTC+9:30 (Adelaida)</option>
+              <option value="UTC+10">UTC+10 (Sídney/Vladivostok)</option>
+              <option value="UTC+11">UTC+11 (Islas Salomón)</option>
+              <option value="UTC+12">UTC+12 (Auckland/Fiyi)</option>
+            </select>
+          </div>
+        </div>
+
         {/* Card 7: Cerebro de Inteligencia Artificial (IA Local) */}
         <div style={{
+
           background: isLightTheme ? '#ffffff' : '#151518',
           border: isLightTheme ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.04)',
           borderRadius: '16px',

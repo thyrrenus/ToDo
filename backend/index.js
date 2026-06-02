@@ -571,9 +571,21 @@ function fetchUrl(targetUrl, maxRedirects = 5) {
       return reject(new Error('Demasiadas redirecciones'));
     }
 
+    if (!targetUrl) {
+      return reject(new Error('URL vacía'));
+    }
+
+    // Clean URL and auto-rewrite webcal/webcals protocols to https
+    let urlToUse = targetUrl.trim();
+    if (urlToUse.toLowerCase().startsWith('webcal://')) {
+      urlToUse = 'https://' + urlToUse.substring(9);
+    } else if (urlToUse.toLowerCase().startsWith('webcals://')) {
+      urlToUse = 'https://' + urlToUse.substring(10);
+    }
+
     let parsedUrl;
     try {
-      parsedUrl = new URL(targetUrl);
+      parsedUrl = new URL(urlToUse);
     } catch (e) {
       return reject(new Error('URL inválida'));
     }
@@ -585,9 +597,9 @@ function fetchUrl(targetUrl, maxRedirects = 5) {
       }
     };
 
-    client.get(targetUrl, options, (res) => {
+    client.get(urlToUse, options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        const redirectUrl = new URL(res.headers.location, targetUrl).toString();
+        const redirectUrl = new URL(res.headers.location, urlToUse).toString();
         return fetchUrl(redirectUrl, maxRedirects - 1).then(resolve).catch(reject);
       }
 
@@ -608,7 +620,33 @@ function fetchUrl(targetUrl, maxRedirects = 5) {
   });
 }
 
-function parseICSDate(dateStr) {
+const WINDOWS_TO_IANA = {
+  'pacific standard time': 'America/Los_Angeles',
+  'mountain standard time': 'America/Denver',
+  'central standard time': 'America/Chicago',
+  'eastern standard time': 'America/New_York',
+  'sa pacific standard time': 'America/Lima',
+  'sa western standard time': 'America/La_Paz',
+  'pacific sa standard time': 'America/Santiago',
+  'chile/continental': 'America/Santiago',
+  'chile/easterisland': 'Pacific/Easter',
+  'santiago': 'America/Santiago',
+  'montevideo standard time': 'America/Montevideo',
+  'gmt standard time': 'Europe/London',
+  'w. europe standard time': 'Europe/Berlin',
+  'romance standard time': 'Europe/Paris',
+  'central europe standard time': 'Europe/Belgrade',
+  'gtb standard time': 'Europe/Athens',
+  'russian standard time': 'Europe/Moscow',
+  'turkey standard time': 'Europe/Istanbul',
+  'arab standard time': 'Asia/Riyadh',
+  'arabian standard time': 'Asia/Dubai',
+  'china standard time': 'Asia/Shanghai',
+  'tokyo standard time': 'Asia/Tokyo',
+  'aus eastern standard time': 'Australia/Sydney'
+};
+
+function parseICSDate(dateStr, tzid) {
   if (!dateStr) return null;
   const cleanStr = dateStr.trim();
   
@@ -625,25 +663,59 @@ function parseICSDate(dateStr) {
     const timePart = parts[1];
 
     if (datePart.length === 8) {
-      const year = datePart.substring(0, 4);
-      const month = datePart.substring(4, 6);
-      const day = datePart.substring(6, 8);
+      const year = parseInt(datePart.substring(0, 4), 10);
+      const month = parseInt(datePart.substring(4, 6), 10);
+      const day = parseInt(datePart.substring(6, 8), 10);
 
-      const hours = timePart.substring(0, 2);
-      const minutes = timePart.substring(2, 4);
-      const seconds = timePart.substring(4, 6) || '00';
+      const hours = parseInt(timePart.substring(0, 2), 10);
+      const minutes = parseInt(timePart.substring(2, 4), 10);
+      const seconds = parseInt(timePart.substring(4, 6) || '00', 10);
 
       const isUtc = timePart.endsWith('Z');
       
       if (isUtc) {
-        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}Z`;
+        return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}Z`;
+      } else if (tzid) {
+        const cleanTzid = tzid.toLowerCase().trim();
+        const ianaTz = WINDOWS_TO_IANA[cleanTzid] || tzid;
+        
+        try {
+          const utcBase = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: ianaTz,
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: 'numeric', second: 'numeric',
+            hour12: false
+          });
+          
+          const formattedParts = formatter.formatToParts(utcBase);
+          const partVal = (type) => formattedParts.find(p => p.type === type).value;
+          
+          const tzDate = new Date(Date.UTC(
+            parseInt(partVal('year'), 10),
+            parseInt(partVal('month'), 10) - 1,
+            parseInt(partVal('day'), 10),
+            parseInt(partVal('hour'), 10) === 24 ? 0 : parseInt(partVal('hour'), 10),
+            parseInt(partVal('minute'), 10),
+            parseInt(partVal('second'), 10)
+          ));
+          
+          const offsetMinutes = Math.round((tzDate.getTime() - utcBase.getTime()) / (60 * 1000));
+          const absoluteDate = new Date(utcBase.getTime() - offsetMinutes * 60 * 1000);
+          
+          return absoluteDate.toISOString();
+        } catch (e) {
+          console.error(`[PROX-CAL] Error parsing timezone ${tzid} (${ianaTz}):`, e.message);
+          return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
       } else {
-        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       }
     }
   }
   return null;
 }
+
 
 function unescapeICSValue(val) {
   if (!val) return '';
@@ -665,13 +737,14 @@ function parseICS(icsContent) {
 
   for (const line of lines) {
     const trimmedLine = line.trim();
-    if (trimmedLine.startsWith('BEGIN:VEVENT')) {
+    const upperLine = trimmedLine.toUpperCase();
+    if (upperLine.startsWith('BEGIN:VEVENT')) {
       currentEvent = {};
       inEvent = true;
       continue;
     }
 
-    if (trimmedLine.startsWith('END:VEVENT')) {
+    if (upperLine.startsWith('END:VEVENT')) {
       if (currentEvent && currentEvent.dtstart) {
         events.push(currentEvent);
       }
@@ -688,7 +761,7 @@ function parseICS(icsContent) {
       const value = line.substring(colonIndex + 1);
 
       const semicolonIndex = keyPart.indexOf(';');
-      const key = semicolonIndex === -1 ? keyPart : keyPart.substring(0, semicolonIndex);
+      const key = (semicolonIndex === -1 ? keyPart : keyPart.substring(0, semicolonIndex)).toUpperCase().trim();
 
       if (key === 'SUMMARY') {
         currentEvent.summary = unescapeICSValue(value);
@@ -698,8 +771,16 @@ function parseICS(icsContent) {
         currentEvent.location = unescapeICSValue(value);
       } else if (key === 'DTSTART') {
         currentEvent.dtstart = value;
+        const tzidMatch = keyPart.match(/TZID=([^;]+)/i);
+        if (tzidMatch) {
+          currentEvent.dtstart_tzid = tzidMatch[1].replace(/['"]/g, '').trim();
+        }
       } else if (key === 'DTEND') {
         currentEvent.dtend = value;
+        const tzidMatch = keyPart.match(/TZID=([^;]+)/i);
+        if (tzidMatch) {
+          currentEvent.dtend_tzid = tzidMatch[1].replace(/['"]/g, '').trim();
+        }
       } else if (key === 'UID') {
         currentEvent.uid = value;
       }
@@ -707,8 +788,8 @@ function parseICS(icsContent) {
   }
 
   return events.map(e => {
-    const start_time = parseICSDate(e.dtstart);
-    let end_time = parseICSDate(e.dtend);
+    const start_time = parseICSDate(e.dtstart, e.dtstart_tzid);
+    let end_time = parseICSDate(e.dtend, e.dtend_tzid);
 
     if (start_time && !end_time) {
       const startDate = new Date(start_time);
@@ -730,16 +811,24 @@ function parseICS(icsContent) {
 
 app.get('/api/external-events', async (req, res) => {
   const { url } = req.query;
+  console.log('[PROX-CAL] Recibida solicitud para URL:', url);
   if (!url) {
+    console.warn('[PROX-CAL] URL vacía o no provista');
     return res.status(400).json({ error: 'Falta el parámetro url' });
   }
 
   try {
+    console.log('[PROX-CAL] Descargando contenido iCal...');
     const icsContent = await fetchUrl(url);
+    console.log('[PROX-CAL] Contenido iCal descargado con éxito. Tamaño:', icsContent.length, 'bytes');
     const parsedEvents = parseICS(icsContent);
+    console.log('[PROX-CAL] Parseo completado. Eventos encontrados:', parsedEvents.length);
+    if (parsedEvents.length > 0) {
+      console.log('[PROX-CAL] Primer evento parseado como muestra:', JSON.stringify(parsedEvents[0], null, 2));
+    }
     res.json(parsedEvents);
   } catch (err) {
-    console.error('Error in external-events proxy:', err.message);
+    console.error('[PROX-CAL] Error en external-events proxy:', err.message);
     res.status(500).json({ error: `No se pudo obtener o procesar el calendario: ${err.message}` });
   }
 });
