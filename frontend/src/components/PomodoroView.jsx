@@ -1,9 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Pause, RotateCcw, Volume2, VolumeX, Coffee, Brain, Timer, Award, PictureInPicture } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, VolumeX, Coffee, Brain, Timer, Award, PictureInPicture, Calendar } from 'lucide-react';
 import { sendNotification } from '../utils/notifications';
+import { isSameDay, parseISO, getHours, getMinutes, differenceInMinutes, startOfToday, format } from 'date-fns';
+import { adjustExternalDate } from '../utils/timezone';
 
-export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
+export function PomodoroView({ 
+  tasks = [], 
+  activeTaskId, 
+  onClearActiveTaskId,
+  lists = [],
+  externalEvents = [],
+  externalEventsError = null,
+  homeTimezone,
+  activeTimezoneMode,
+  onSelectTask
+}) {
   const isPiPSupported = 'documentPictureInPicture' in window;
   const [pipWindow, setPipWindow] = useState(null);
   const [mode, setMode] = useState('focus'); // 'focus', 'shortBreak', 'longBreak'
@@ -19,12 +31,219 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
       return [];
     }
   });
+
+  const [rightPanelTab, setRightPanelTab] = useState('calendar'); // 'calendar' or 'sessions'
+  const [now, setNow] = useState(new Date());
+  const [focusNote, setFocusNote] = useState('');
+  const timelineScrollRef = useRef(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [sessionTotal, setSessionTotal] = useState(25 * 60);
+
+  const handleAdjustTime = (amountSeconds) => {
+    setTimeLeft((prev) => Math.max(0, prev + amountSeconds));
+    setSessionTotal((prev) => Math.max(0, prev + amountSeconds));
+  };
+
+  const getSessionInterval = () => {
+    const endTime = new Date(Date.now() + timeLeft * 1000);
+    const startTime = new Date(endTime.getTime() - sessionTotal * 1000);
+    
+    const formatTimeStr = (date) => {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    };
+    
+    return `${formatTimeStr(startTime)} - ${formatTimeStr(endTime)}`;
+  };
+
+  // Tick clock to update current time line every 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Load note when selectedTaskId changes
+  useEffect(() => {
+    const key = selectedTaskId ? `pomodoro_note_${selectedTaskId}` : 'pomodoro_note_general';
+    const savedNote = localStorage.getItem(key) || '';
+    setFocusNote(savedNote);
+  }, [selectedTaskId]);
+
+  const handleFocusNoteChange = (newText) => {
+    setFocusNote(newText);
+    const key = selectedTaskId ? `pomodoro_note_${selectedTaskId}` : 'pomodoro_note_general';
+    localStorage.setItem(key, newText);
+  };
+
+  // Scroll to current hour on load or tab change
+  useEffect(() => {
+    if (rightPanelTab === 'calendar' && timelineScrollRef.current) {
+      const nowHours = getHours(now);
+      const nowMins = getMinutes(now);
+      const lineTop = (nowHours + nowMins / 60) * 60; // 60px per hour
+      const containerHeight = timelineScrollRef.current.clientHeight;
+      timelineScrollRef.current.scrollTop = Math.max(0, lineTop - containerHeight / 2);
+    }
+  }, [rightPanelTab]);
+
+  const getListColor = (listId) => {
+    if (!listId) return '#5b21b6';
+    const list = lists.find(l => l.id === listId);
+    return list?.color || '#5b21b6';
+  };
+
+  const parseDate = (dStr) => {
+    if (!dStr) return null;
+    try {
+      const d = parseISO(dStr);
+      return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Filter tasks that have start and end times
+  const scheduledTasks = (tasks || []).map(t => {
+    const start = parseDate(t.start_time);
+    const end = parseDate(t.end_time);
+    if (!start || !end) return null;
+    return {
+      id: `task-${t.id}`,
+      itemId: t.id,
+      isSubtask: false,
+      title: t.title,
+      start,
+      end,
+      list_id: t.list_id,
+      isCompleted: !!t.is_completed,
+      priority: t.priority,
+      description: t.description || ''
+    };
+  }).filter(Boolean);
+
+  // Extract scheduled subtasks from all tasks
+  const scheduledSubtasks = [];
+  (tasks || []).forEach(t => {
+    if (t.subtasks && Array.isArray(t.subtasks)) {
+      t.subtasks.forEach(st => {
+        const start = parseDate(st.start_time);
+        const end = parseDate(st.end_time);
+        if (start && end) {
+          scheduledSubtasks.push({
+            id: `sub-${st.id}`,
+            itemId: st.id,
+            parentTaskId: t.id,
+            isSubtask: true,
+            title: `${t.title} > ${st.title}`,
+            start,
+            end,
+            list_id: t.list_id,
+            isCompleted: !!st.is_completed,
+            priority: t.priority || 0,
+            description: st.description || ''
+          });
+        }
+      });
+    }
+  });
+
+  // Map external events to the scheduled calendar format
+  const mappedExternalEvents = (externalEvents || []).map(e => {
+    const start = parseDate(e.start_time);
+    const end = parseDate(e.end_time);
+    if (!start || !end) return null;
+    const adjustedStart = adjustExternalDate(start, homeTimezone, activeTimezoneMode);
+    const adjustedEnd = adjustExternalDate(end, homeTimezone, activeTimezoneMode);
+    return {
+      id: `ext-${e.uid}`,
+      itemId: e.uid,
+      isSubtask: false,
+      isExternal: true,
+      title: e.title,
+      start: adjustedStart,
+      end: adjustedEnd,
+      description: e.description || '',
+      location: e.location || ''
+    };
+  }).filter(Boolean);
+
+  const scheduledEvents = [...scheduledTasks, ...scheduledSubtasks, ...mappedExternalEvents];
+  const today = startOfToday();
+  const todayEvents = scheduledEvents.filter(e => isSameDay(e.start, today));
+
+  // Compute overlapping layout groups and conflicts for today
+  const todayEventLayoutProps = new Map();
+  
+  // 1. Group events into connected components of overlapping intervals
+  const components = [];
+  const sortedEvents = [...todayEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  sortedEvents.forEach(event => {
+    const overlappingCompIndices = [];
+    components.forEach((comp, idx) => {
+      const overlaps = comp.some(e => event.start < e.end && event.end > e.start);
+      if (overlaps) {
+        overlappingCompIndices.push(idx);
+      }
+    });
+
+    if (overlappingCompIndices.length === 0) {
+      components.push([event]);
+    } else {
+      const mergedComp = [event];
+      overlappingCompIndices.sort((a, b) => b - a).forEach(idx => {
+        mergedComp.push(...components[idx]);
+        components.splice(idx, 1);
+      });
+      components.push(mergedComp);
+    }
+  });
+
+  // 2. Distribute into columns inside each component
+  components.forEach(comp => {
+    const compCols = [];
+    const compEvents = [...comp].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    compEvents.forEach(event => {
+      let colIdx = 0;
+      while (colIdx < compCols.length) {
+        const hasOverlap = compCols[colIdx].some(e => event.start < e.end && event.end > e.start);
+        if (!hasOverlap) {
+          break;
+        }
+        colIdx++;
+      }
+      if (colIdx === compCols.length) {
+        compCols.push([]);
+      }
+      compCols[colIdx].push(event);
+    });
+
+    const totalCols = compCols.length;
+    const activeEvents = comp.filter(e => !e.isCompleted);
+
+    compCols.forEach((colEvents, colIdx) => {
+      colEvents.forEach(event => {
+        const hasConflict = !event.isCompleted && activeEvents.some(
+          e => e.id !== event.id && event.start < e.end && event.end > e.start
+        );
+
+        todayEventLayoutProps.set(event.id, {
+          widthPercent: 100 / totalCols,
+          leftPercent: colIdx * (100 / totalCols),
+          hasConflict
+        });
+      });
+    });
+  });
   
   useEffect(() => {
     if (activeTaskId) {
       setSelectedTaskId(activeTaskId.toString());
       setMode('focus');
       setTimeLeft(25 * 60);
+      setSessionTotal(25 * 60);
       setIsRunning(true);
       if (onClearActiveTaskId) {
         onClearActiveTaskId();
@@ -176,6 +395,7 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
 
   useEffect(() => {
     setTimeLeft(modeSettings[mode].time);
+    setSessionTotal(modeSettings[mode].time);
     setIsRunning(false);
   }, [mode]);
 
@@ -237,6 +457,7 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeft(modeSettings[mode].time);
+    setSessionTotal(modeSettings[mode].time);
   };
 
   const handleTogglePiP = async () => {
@@ -311,8 +532,7 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
   };
 
   // Calculate progress percentage for SVG circular progress
-  const currentMax = modeSettings[mode].time;
-  const progressPercent = ((currentMax - timeLeft) / currentMax) * 100;
+  const progressPercent = sessionTotal > 0 ? ((sessionTotal - timeLeft) / sessionTotal) * 100 : 0;
   const strokeDashoffset = 502 - (502 * progressPercent) / 100; // 502 is circumference for r=80
 
   const activeModeColor = modeSettings[mode].color;
@@ -446,7 +666,11 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
           </div>
 
           {/* Visual Circular Countdown Timer */}
-          <div style={{ position: 'relative', width: '220px', height: '220px', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', marginBottom: '2.5rem' }}>
+          <div 
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{ position: 'relative', width: '220px', height: '220px', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', marginBottom: '2.5rem', cursor: 'default' }}
+          >
             <svg style={{ transform: 'rotate(-90deg)', width: '220px', height: '220px' }}>
               {/* Background circle */}
               <circle 
@@ -472,13 +696,72 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
             </svg>
             
             {/* Countdown Text */}
-            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                {formatTime(timeLeft)}
-              </span>
-              <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', tracking: '0.1em', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: 600 }}>
-                {modeSettings[mode].label}
-              </span>
+            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%' }}>
+                {isHovered && (
+                  <button
+                    onClick={() => handleAdjustTime(-60)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: activeModeColor,
+                      fontSize: '1.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      padding: '0 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      userSelect: 'none',
+                      transition: 'transform 0.1s',
+                    }}
+                    onMouseEnter={(e) => e.target.style.transform = 'scale(1.2)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                    title="Restar 1 minuto"
+                  >
+                    -
+                  </button>
+                )}
+
+                <span style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', userSelect: 'none' }}>
+                  {formatTime(timeLeft)}
+                </span>
+
+                {isHovered && (
+                  <button
+                    onClick={() => handleAdjustTime(60)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: activeModeColor,
+                      fontSize: '1.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      padding: '0 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      userSelect: 'none',
+                      transition: 'transform 0.1s',
+                    }}
+                    onMouseEnter={(e) => e.target.style.transform = 'scale(1.2)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                    title="Sumar 1 minuto"
+                  >
+                    +
+                  </button>
+                )}
+              </div>
+              
+              {isHovered ? (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: 500, fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
+                  {getSessionInterval()}
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', tracking: '0.1em', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: 600 }}>
+                  {modeSettings[mode].label}
+                </span>
+              )}
             </div>
           </div>
 
@@ -557,51 +840,291 @@ export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
 
         </div>
 
-        {/* Right Side: Completed Sessions / Focus Log */}
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '2rem' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
-            <Award style={{ color: '#f59e0b' }} size={20} />
-            Sesiones Completadas
-          </h3>
-
-          {completedSessions.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>
-              <Brain size={48} style={{ opacity: 0.15, marginBottom: '1rem' }} />
-              <p style={{ fontSize: '0.9rem', fontWeight: 500 }}>No has completado ninguna sesión de enfoque todavía.</p>
-              <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '4px' }}>¡Inicia el temporizador de arriba para desbloquear tu primer logro!</p>
+        {/* Right Side: Tab switcher (Calendar / Completed Sessions) & Focus Note */}
+        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '1.5rem', height: '100%' }}>
+          
+          {/* Tab controls */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+              {selectedTaskId ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.95rem', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: activeModeColor, display: 'inline-block' }} />
+                  {tasks.find(t => t.id === parseInt(selectedTaskId, 10))?.title || 'Trabajo General'}
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.95rem' }}>Trabajo General</span>
+              )}
+            </h3>
+            
+            <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.03)', padding: '2px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <button
+                onClick={() => setRightPanelTab('calendar')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  backgroundColor: rightPanelTab === 'calendar' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  color: rightPanelTab === 'calendar' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Ver agenda del día"
+              >
+                <Calendar size={12} />
+                Agenda
+              </button>
+              <button
+                onClick={() => setRightPanelTab('sessions')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  backgroundColor: rightPanelTab === 'sessions' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  color: rightPanelTab === 'sessions' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Historial de sesiones completadas"
+              >
+                <Award size={12} />
+                Sesiones
+              </button>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', flex: 1, maxHeight: '350px', paddingRight: '4px' }}>
-              {completedSessions.map(session => (
+          </div>
+
+          {/* Body Content */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {rightPanelTab === 'calendar' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '1rem', overflow: 'hidden' }}>
+                
+                {/* Scrollable Timeline */}
                 <div 
-                  key={session.id} 
+                  ref={timelineScrollRef}
+                  className="calendar-grid-scroll"
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 16px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.05)',
+                    position: 'relative',
+                    flex: 1,
                     borderRadius: '8px',
-                    transition: 'background-color 0.2s'
+                    border: '1px solid rgba(255,255,255,0.04)',
+                    backgroundColor: 'rgba(0,0,0,0.12)',
+                    maxHeight: '340px'
                   }}
                 >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '75%' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {session.taskTitle}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      Modo: {session.mode} • {session.duration} min
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '4px' }}>
-                    {session.timestamp}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+                  <div className="calendar-grid" style={{ height: `${24 * 60}px`, display: 'flex', position: 'relative' }}>
+                    {/* Time Axis */}
+                    <div className="time-axis" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                      {Array.from({ length: 24 }, (_, i) => i).map(hour => (
+                        <div key={hour} className="time-label" style={{ height: '60px' }}>
+                          {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                        </div>
+                      ))}
+                    </div>
 
+                    {/* Day Column (Today) */}
+                    <div className="day-column" style={{ flex: 1, position: 'relative', borderRight: 'none' }}>
+                      {/* Hour Lines */}
+                      {Array.from({ length: 24 }, (_, i) => i).map(hour => (
+                        <div 
+                          key={hour} 
+                          className="grid-cell" 
+                          style={{ height: '60px' }} 
+                        />
+                      ))}
+
+                      {/* Current Time marker line */}
+                      {(() => {
+                        const nowHours = getHours(now);
+                        const nowMins = getMinutes(now);
+                        const lineTop = (nowHours + nowMins / 60) * 60;
+                        return (
+                          <div 
+                            className="current-time-line"
+                            style={{
+                              position: 'absolute',
+                              top: `${lineTop}px`,
+                              left: 0,
+                              right: 0,
+                              height: '2px',
+                              background: '#ef4444',
+                              zIndex: 10,
+                              pointerEvents: 'none'
+                            }}
+                          >
+                            <div className="time-line-pulsator" style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: '-4px',
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              background: '#ef4444',
+                              boxShadow: '0 0 8px #ef4444',
+                              animation: 'pulse 1.5s infinite'
+                            }} />
+                          </div>
+                        );
+                      })()}
+
+                      {/* Event Blocks */}
+                      {todayEvents.map(event => {
+                        const start = event.start;
+                        const end = event.end;
+                        
+                        let top = (getHours(start) + getMinutes(start) / 60) * 60;
+                        let durationMinutes = differenceInMinutes(end, start);
+                        let height = Math.max((durationMinutes / 60) * 60, 24);
+
+                        const startTimeStr = format(start, 'h:mm a');
+                        const endTimeStr = format(end, 'h:mm a');
+
+                        const layoutProps = todayEventLayoutProps.get(event.id) || { widthPercent: 100, leftPercent: 0, hasConflict: false };
+
+                        const borderStyle = layoutProps.hasConflict 
+                          ? '1px solid rgba(239, 68, 68, 0.4)' 
+                          : (event.isExternal ? '1px solid rgba(0, 120, 212, 0.3)' : 'none');
+                        
+                        const borderLeftStyle = layoutProps.hasConflict 
+                          ? '4px solid #ef4444' 
+                          : (event.isExternal ? '4px solid #0078d4' : `4px solid ${getListColor(event.list_id)}`);
+                        
+                        const shadowStyle = layoutProps.hasConflict
+                          ? '0 4px 12px rgba(239, 68, 68, 0.25)'
+                          : (event.isExternal ? '0 4px 12px rgba(0, 120, 212, 0.15)' : 'none');
+
+                        const baseBgColor = event.isExternal ? 'rgba(0, 120, 212, 0.12)' : 'rgba(255, 255, 255, 0.03)';
+                        const bgColor = layoutProps.hasConflict 
+                          ? 'rgba(239, 68, 68, 0.12)'
+                          : baseBgColor;
+
+                        const handleBlockClick = () => {
+                          if (!event.isExternal) {
+                            setSelectedTaskId(event.itemId.toString());
+                          }
+                        };
+
+                        return (
+                          <div 
+                            key={event.id} 
+                            className="task-block"
+                            onClick={handleBlockClick}
+                            style={{
+                              top: `${top}px`,
+                              height: `${height}px`,
+                              background: bgColor,
+                              color: 'var(--text-primary)',
+                              position: 'absolute',
+                              left: `calc(${layoutProps.leftPercent}% + 4px)`,
+                              right: `calc(${100 - layoutProps.leftPercent - layoutProps.widthPercent}% + 4px)`,
+                              cursor: event.isExternal ? 'default' : 'pointer',
+                              userSelect: 'none',
+                              zIndex: layoutProps.hasConflict ? 5 : 2,
+                              border: borderStyle,
+                              borderLeft: borderLeftStyle,
+                              boxShadow: shadowStyle,
+                              borderRadius: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              padding: '4px 8px',
+                              boxSizing: 'border-box'
+                            }}
+                            title={`${event.title}\n${startTimeStr} - ${endTimeStr}`}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
+                              {event.isSubtask && <span style={{ fontSize: '0.6rem', textTransform: 'uppercase', opacity: 0.6 }}>[Sub]</span>}
+                              {event.isExternal && <span style={{ fontSize: '0.6rem', background: '#0078d4', color: '#ffffff', padding: '0px 4px', borderRadius: '3px', fontWeight: 800 }}>Outlook</span>}
+                              <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: 600, fontSize: '0.75rem' }}>{event.title}</span>
+                            </div>
+                            <div style={{ fontSize: '0.65rem', opacity: 0.7, color: 'var(--text-secondary)' }}>
+                              {startTimeStr} - {endTimeStr}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Focus Note Section */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: 'auto' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Nota de Enfoque</label>
+                  <textarea
+                    placeholder={selectedTaskId ? "¿Qué tienes en mente para esta sesión de enfoque?" : "Selecciona una tarea para guardar notas específicas o escribe aquí una nota general."}
+                    value={focusNote}
+                    onChange={(e) => handleFocusNoteChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      height: '80px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                      fontSize: '0.85rem',
+                      resize: 'none',
+                      fontFamily: 'inherit',
+                      lineHeight: '1.4',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = activeModeColor}
+                    onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
+                  />
+                </div>
+
+              </div>
+            ) : (
+              /* Completed Sessions List */
+              completedSessions.length === 0 ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>
+                  <Brain size={48} style={{ opacity: 0.15, marginBottom: '1rem' }} />
+                  <p style={{ fontSize: '0.9rem', fontWeight: 500 }}>No has completado ninguna sesión de enfoque todavía.</p>
+                  <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '4px' }}>¡Inicia el temporizador de arriba para desbloquear tu primer logro!</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', flex: 1, maxHeight: '440px', paddingRight: '4px' }}>
+                  {completedSessions.map(session => (
+                    <div 
+                      key={session.id} 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: '8px',
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '75%' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {session.taskTitle}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Modo: {session.mode} • {session.duration} min
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '4px' }}>
+                        {session.timestamp}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
 
         </div>
       </div>

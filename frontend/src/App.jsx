@@ -1560,7 +1560,15 @@ function App() {
             />
 
           ) : mainView === 'pomodoro' ? (
-            <PomodoroView tasks={tasks} />
+            <PomodoroView 
+              tasks={tasks} 
+              lists={lists}
+              externalEvents={externalEvents}
+              externalEventsError={externalEventsError}
+              homeTimezone={homeTimezone}
+              activeTimezoneMode={activeTimezoneMode}
+              onSelectTask={setSelectedTaskId}
+            />
           ) : mainView === 'eisenhower' ? (
             <EisenhowerView 
               tasks={tasks} 
@@ -2260,6 +2268,12 @@ function App() {
               tasks={tasks} 
               activeTaskId={activePomodoroTaskId}
               onClearActiveTaskId={() => setActivePomodoroTaskId(null)}
+              lists={lists}
+              externalEvents={externalEvents}
+              externalEventsError={externalEventsError}
+              homeTimezone={homeTimezone}
+              activeTimezoneMode={activeTimezoneMode}
+              onSelectTask={setSelectedTaskId}
             />
           ) : mainView === 'eisenhower' ? (
             <EisenhowerView 
