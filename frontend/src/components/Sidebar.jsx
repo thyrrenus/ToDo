@@ -49,7 +49,9 @@ export function Sidebar({
   activeTagFilter, 
   setActiveTagFilter,
   listGroups = [],
-  onRefreshListGroups 
+  onRefreshListGroups,
+  onUpdateTaskList,
+  onRescheduleTask
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -85,6 +87,8 @@ export function Sidebar({
   const [isDraggingList, setIsDraggingList] = useState(false);
   const [draggedOverGroupId, setDraggedOverGroupId] = useState(null);
   const [isDraggedOverGeneral, setIsDraggedOverGeneral] = useState(false);
+  const [draggedOverListId, setDraggedOverListId] = useState(null);
+  const [draggedOverSystemView, setDraggedOverSystemView] = useState(null);
 
   const handleAddList = async (e) => {
     if (e) e.preventDefault();
@@ -281,7 +285,44 @@ export function Sidebar({
           setIsDraggingList(false);
           e.currentTarget.style.opacity = '1';
         }}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', position: 'relative', borderRadius: '6px', padding: '6px 12px', cursor: 'grab' }}
+        onDragOver={(e) => {
+          if (!isDraggingList) {
+            e.preventDefault();
+            setDraggedOverListId(list.id);
+          }
+        }}
+        onDragLeave={() => {
+          if (!isDraggingList) {
+            setDraggedOverListId(null);
+          }
+        }}
+        onDrop={async (e) => {
+          if (!isDraggingList) {
+            e.preventDefault();
+            setDraggedOverListId(null);
+            const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
+            if (taskIdStr) {
+              const taskId = parseInt(taskIdStr, 10);
+              if (!isNaN(taskId) && onUpdateTaskList) {
+                await onUpdateTaskList(taskId, list.id);
+              }
+            }
+          }
+        }}
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          width: '100%', 
+          position: 'relative', 
+          borderRadius: '6px', 
+          padding: '6px 12px', 
+          cursor: 'grab',
+          background: draggedOverListId === list.id ? 'rgba(255, 255, 255, 0.08)' : undefined,
+          border: draggedOverListId === list.id ? `1.5px dashed ${list.color || 'var(--accent-hover)'}` : '1.5px solid transparent',
+          boxShadow: draggedOverListId === list.id ? `0 0 10px ${list.color || 'var(--accent-hover)'}30` : 'none',
+          transition: 'all 0.2s ease'
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
           {IconComponent ? (
@@ -338,18 +379,109 @@ export function Sidebar({
         <a 
           className={`nav-item ${activeList === 'inbox' ? 'active' : ''}`}
           onClick={() => setActiveList('inbox')}
+          onDragOver={(e) => {
+            if (!isDraggingList) {
+              e.preventDefault();
+              setDraggedOverSystemView('inbox');
+            }
+          }}
+          onDragLeave={() => {
+            if (!isDraggingList) {
+              setDraggedOverSystemView(null);
+            }
+          }}
+          onDrop={async (e) => {
+            if (!isDraggingList) {
+              e.preventDefault();
+              setDraggedOverSystemView(null);
+              const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
+              if (taskIdStr) {
+                const taskId = parseInt(taskIdStr, 10);
+                if (!isNaN(taskId)) {
+                  const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
+                  const inboxListId = inboxList ? inboxList.id : null;
+                  if (onUpdateTaskList) {
+                    await onUpdateTaskList(taskId, inboxListId);
+                  }
+                }
+              }
+            }
+          }}
+          style={{
+            background: draggedOverSystemView === 'inbox' ? 'rgba(255, 255, 255, 0.08)' : undefined,
+            border: draggedOverSystemView === 'inbox' ? '1.5px dashed var(--accent-hover)' : '1.5px solid transparent',
+            transition: 'all 0.2s ease'
+          }}
         >
           <Inbox /> Inbox
         </a>
         <a 
           className={`nav-item ${activeList === 'today' ? 'active' : ''}`}
           onClick={() => setActiveList('today')}
+          onDragOver={(e) => {
+            if (!isDraggingList) {
+              e.preventDefault();
+              setDraggedOverSystemView('today');
+            }
+          }}
+          onDragLeave={() => {
+            if (!isDraggingList) {
+              setDraggedOverSystemView(null);
+            }
+          }}
+          onDrop={async (e) => {
+            if (!isDraggingList) {
+              e.preventDefault();
+              setDraggedOverSystemView(null);
+              const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
+              if (taskIdStr) {
+                const taskId = parseInt(taskIdStr, 10);
+                if (!isNaN(taskId) && onRescheduleTask) {
+                  await onRescheduleTask(taskId, 0);
+                }
+              }
+            }
+          }}
+          style={{
+            background: draggedOverSystemView === 'today' ? 'rgba(255, 255, 255, 0.08)' : undefined,
+            border: draggedOverSystemView === 'today' ? '1.5px dashed var(--accent-hover)' : '1.5px solid transparent',
+            transition: 'all 0.2s ease'
+          }}
         >
           <Calendar /> Today
         </a>
         <a 
           className={`nav-item ${activeList === 'upcoming' ? 'active' : ''}`}
           onClick={() => setActiveList('upcoming')}
+          onDragOver={(e) => {
+            if (!isDraggingList) {
+              e.preventDefault();
+              setDraggedOverSystemView('upcoming');
+            }
+          }}
+          onDragLeave={() => {
+            if (!isDraggingList) {
+              setDraggedOverSystemView(null);
+            }
+          }}
+          onDrop={async (e) => {
+            if (!isDraggingList) {
+              e.preventDefault();
+              setDraggedOverSystemView(null);
+              const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
+              if (taskIdStr) {
+                const taskId = parseInt(taskIdStr, 10);
+                if (!isNaN(taskId) && onRescheduleTask) {
+                  await onRescheduleTask(taskId, 1);
+                }
+              }
+            }
+          }}
+          style={{
+            background: draggedOverSystemView === 'upcoming' ? 'rgba(255, 255, 255, 0.08)' : undefined,
+            border: draggedOverSystemView === 'upcoming' ? '1.5px dashed var(--accent-hover)' : '1.5px solid transparent',
+            transition: 'all 0.2s ease'
+          }}
         >
           <CalendarDays /> Upcoming
         </a>

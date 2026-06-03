@@ -18,6 +18,7 @@ import { AdminView } from './components/AdminView';
 import { SharedTasksView } from './components/SharedTasksView';
 import { EmptyState } from './components/EmptyState';
 import { CommandPalette } from './components/CommandPalette';
+import { GlobalContextMenu } from './components/GlobalContextMenu';
 import { Inbox, Plus, Mic, X } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from './utils/notifications';
@@ -432,6 +433,9 @@ function App() {
     window.addEventListener('auth-failed', handleAuthFailed);
     return () => window.removeEventListener('auth-failed', handleAuthFailed);
   }, []);
+  const [globalContextMenu, setGlobalContextMenu] = useState(null);
+  const [activePomodoroTaskId, setActivePomodoroTaskId] = useState(null);
+
   const [mainView, setMainView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -1332,6 +1336,55 @@ function App() {
     }
   };
 
+  const handleTaskContextMenu = (e, task) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const menuWidth = 200;
+    const menuHeight = 350;
+    
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    x = Math.max(10, x);
+    y = Math.max(10, y);
+    
+    setGlobalContextMenu({
+      task,
+      x,
+      y
+    });
+  };
+
+  const handleRescheduleTask = async (taskId, daysOffset) => {
+    let due_date = null;
+    if (daysOffset !== null) {
+      due_date = format(addDays(new Date(), daysOffset), 'yyyy-MM-dd');
+    }
+    try {
+      await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ due_date })
+      });
+      fetchTasks();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleStartPomodoroFocus = (taskId) => {
+    setActivePomodoroTaskId(taskId);
+    setMainView('pomodoro');
+  };
+
   const handleDeleteSubtask = async (id) => {
     try {
       const res = await fetch(`/api/subtasks/${id}`, { method: 'DELETE' });
@@ -1539,6 +1592,7 @@ function App() {
                 onDeleteSubtask={handleDeleteSubtask}
                 homeTimezone={homeTimezone}
                 activeTimezoneMode={activeTimezoneMode}
+                onSelectTask={setSelectedTaskId}
               />
             </div>
           </div>
@@ -1627,6 +1681,8 @@ function App() {
             setActiveTagFilter={setActiveTagFilter}
             listGroups={listGroups}
             onRefreshListGroups={fetchListGroups}
+            onUpdateTaskList={handleUpdateTaskList}
+            onRescheduleTask={handleRescheduleTask}
           />
         )}
         
@@ -2035,6 +2091,7 @@ function App() {
                             }}
                             onToggle={() => handleToggleTask(task.id, task.is_completed)}
                             onSubtaskAdded={fetchTasks}
+                            onContextMenu={handleTaskContextMenu}
                           />
                         ))}
                       </div>
@@ -2111,6 +2168,7 @@ function App() {
                                 }}
                                 onToggle={() => handleToggleTask(task.id, task.is_completed)}
                                 onSubtaskAdded={fetchTasks}
+                                onContextMenu={handleTaskContextMenu}
                               />
                             ))}
                           </div>
@@ -2151,6 +2209,7 @@ function App() {
                         }}
                         onToggle={() => handleToggleTask(task.id, task.is_completed)}
                         onSubtaskAdded={fetchTasks}
+                        onContextMenu={handleTaskContextMenu}
                       />
                     ))
                   )}
@@ -2191,13 +2250,18 @@ function App() {
             />
 
           ) : mainView === 'pomodoro' ? (
-            <PomodoroView tasks={tasks} />
+            <PomodoroView 
+              tasks={tasks} 
+              activeTaskId={activePomodoroTaskId}
+              onClearActiveTaskId={() => setActivePomodoroTaskId(null)}
+            />
           ) : mainView === 'eisenhower' ? (
             <EisenhowerView 
               tasks={tasks} 
               onSelectTask={setSelectedTaskId} 
               onUpdateTaskPriority={handleUpdateTaskPriority} 
               onAddTaskInQuadrant={handleAddTaskInQuadrant}
+              onTaskContextMenu={handleTaskContextMenu}
             />
           ) : mainView === 'gtd' ? (
             <GTDView 
@@ -2214,6 +2278,7 @@ function App() {
               onUpdateTaskPriority={handleUpdateTaskPriority}
               onUpdateTaskList={handleUpdateTaskList}
               onAddTaskInQuadrant={handleAddTaskInQuadrant}
+              onTaskContextMenu={handleTaskContextMenu}
             />
           ) : mainView === 'settings' ? (
             <SettingsView 
@@ -2268,6 +2333,7 @@ function App() {
               onDeleteSubtask={handleDeleteSubtask}
               homeTimezone={homeTimezone}
               activeTimezoneMode={activeTimezoneMode}
+              onSelectTask={setSelectedTaskId}
             />
           </aside>
         )}
@@ -2407,6 +2473,23 @@ function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Global Context Menu */}
+        {globalContextMenu && (
+          <GlobalContextMenu 
+            task={globalContextMenu.task}
+            x={globalContextMenu.x}
+            y={globalContextMenu.y}
+            lists={lists}
+            onClose={() => setGlobalContextMenu(null)}
+            onToggleComplete={handleToggleTask}
+            onUpdatePriority={handleUpdateTaskPriority}
+            onMoveToList={handleUpdateTaskList}
+            onReschedule={handleRescheduleTask}
+            onStartPomodoro={handleStartPomodoroFocus}
+            onDelete={handleDeleteTask}
+          />
         )}
 
         {/* Global Command Palette */}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Columns, Calendar, ListTodo, Plus, Check } from 'lucide-react';
 
-export function KanbanView({ tasks, lists, onSelectTask, onUpdateTaskPriority, onUpdateTaskList, onAddTaskInQuadrant }) {
+export function KanbanView({ tasks, lists, onSelectTask, onUpdateTaskPriority, onUpdateTaskList, onAddTaskInQuadrant, onTaskContextMenu }) {
   const [groupBy, setGroupBy] = useState('list'); // 'list', 'priority', 'status'
   const [inlineTitles, setInlineTitles] = useState({});
 
@@ -230,6 +230,11 @@ export function KanbanView({ tasks, lists, onSelectTask, onUpdateTaskPriority, o
                         draggable
                         onDragStart={(e) => handleDragStart(e, task.id)}
                         onClick={() => onSelectTask(task.id)}
+                        onContextMenu={(e) => {
+                          if (onTaskContextMenu) {
+                            onTaskContextMenu(e, task);
+                          }
+                        }}
                         style={{
                           background: 'rgba(255,255,255,0.03)',
                           border: '1px solid rgba(255,255,255,0.05)',

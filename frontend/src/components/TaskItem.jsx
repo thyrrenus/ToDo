@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded }) {
+export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu }) {
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -60,6 +60,11 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
       onClick={onClick}
       draggable={true}
       onDragStart={handleDragStart}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          onContextMenu(e, task);
+        }
+      }}
       style={{ cursor: 'grab' }}
     >
       <div className="task-item-main-row">

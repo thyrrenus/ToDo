@@ -632,19 +632,19 @@ body {
 }
 
 .date-reminder-trigger-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
+  padding: 6px 12px;
+  border-radius: 30px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  width: 100%;
+  font-size: 0.78rem;
+  transition: all 0.15s ease;
+  width: auto;
 }
 
 .date-reminder-trigger-btn:hover {
@@ -1194,7 +1194,7 @@ input:checked + .slider:before {
   height: auto;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  resize: vertical;
+  resize: none;
   min-height: 60px;
   max-height: 600px;
 }
@@ -2121,4 +2121,284 @@ input:checked + .slider:before {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* Priority Mini-Pill Selector */
+.priority-select-container select:hover + .priority-trigger-visual {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Notion-style Slash Commands (/) Popover Menu */
+.slash-commands-menu {
+  background: rgba(18, 18, 24, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 220px;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: fadeInQuickCreate 0.1s ease-out forwards;
+}
+
+.slash-command-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+.slash-command-item:hover,
+.slash-command-item.active {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.slash-command-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  transition: all 0.12s ease;
+}
+
+.slash-command-item:hover .slash-command-icon,
+.slash-command-item.active .slash-command-icon {
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--accent-hover);
+}
+
+.slash-command-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.slash-command-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.slash-command-desc {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+/* Editor Autosave Status Badge */
+.detail-description-wrapper {
+  position: relative;
+}
+
+.subtask-editor-container {
+  position: relative;
+}
+
+.editor-autosave-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  animation: fadeInAutosave 0.2s ease-out;
+}
+
+@keyframes fadeInAutosave {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.editor-autosave-badge.saving {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.editor-autosave-badge.saved {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.editor-autosave-badge.error {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.editor-autosave-badge .spinner-icon {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: spinAutosave 0.8s linear infinite;
+}
+
+@keyframes spinAutosave {
+  to { transform: rotate(360deg); }
+}
+
+/* Blockquote styled as Callout Banner */
+.ql-container .ql-editor blockquote {
+  border-left: 4px solid var(--accent-hover);
+  background: rgba(124, 58, 237, 0.05);
+  padding: 10px 14px;
+  margin: 12px 0;
+  border-radius: 0 8px 8px 0;
+  color: var(--text-primary);
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ql-container .ql-editor blockquote::before {
+  content: "💡";
+  font-size: 1.05rem;
+}
+
+/* Task reference link pills */
+.ql-container .ql-editor a[href^="/tasks/"] {
+  background: rgba(124, 58, 237, 0.1);
+  color: var(--accent-hover) !important;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-decoration: none !important;
+  font-weight: 600;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.ql-container .ql-editor a[href^="/tasks/"]:hover {
+  background: var(--accent-hover);
+  color: #ffffff !important;
+}
+
+/* Float convert selection button */
+.convert-selection-btn {
+  position: absolute;
+  background: var(--accent-hover);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 10005;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(4px);
+  animation: fadeInAutosave 0.15s ease-out;
+  transition: background-color 0.15s, transform 0.1s;
+}
+
+.convert-selection-btn:hover {
+  background: #6d28d9;
+  transform: scale(1.02);
+}
+
+.convert-selection-btn:active {
+  transform: scale(0.98);
+}
+
+/* Collapsible details accordion styling */
+.ql-container .ql-editor details {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 10px 0;
+  transition: all 0.2s ease;
+}
+
+.ql-container .ql-editor details:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ql-container .ql-editor details summary {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  padding: 2px 0;
+  user-select: none;
+  list-style: none; /* hide default summary marker */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Hide native summary marker in safari/chrome */
+.ql-container .ql-editor details summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Custom triangle marker icon */
+.ql-container .ql-editor details summary::before {
+  content: "▶";
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+.ql-container .ql-editor details[open] summary::before {
+  transform: rotate(90deg);
+  color: var(--accent-hover);
+}
+
+.ql-container .ql-editor details p {
+  margin: 8px 0 0 16px !important;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Context Menu for Description Editor */
+.editor-context-menu {
+  width: 190px !important;
+}
+
+.editor-context-menu.align-left .context-menu-submenu {
+  left: auto !important;
+  right: 100% !important;
+}
+
+
+
+
 

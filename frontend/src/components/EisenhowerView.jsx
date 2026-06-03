@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertCircle, Calendar, CalendarDays, Trash2, Plus, LayoutGrid, Check } from 'lucide-react';
 
-export function EisenhowerView({ tasks, onSelectTask, onUpdateTaskPriority, onAddTaskInQuadrant }) {
+export function EisenhowerView({ tasks, onSelectTask, onUpdateTaskPriority, onAddTaskInQuadrant, onTaskContextMenu }) {
   const [inlineTitles, setInlineTitles] = useState({
     3: '', // Q1
     2: '', // Q2
@@ -155,6 +155,11 @@ export function EisenhowerView({ tasks, onSelectTask, onUpdateTaskPriority, onAd
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => onSelectTask(task.id)}
+                      onContextMenu={(e) => {
+                        if (onTaskContextMenu) {
+                          onTaskContextMenu(e, task);
+                        }
+                      }}
                       style={{
                         background: 'rgba(255,255,255,0.03)',
                         border: '1px solid rgba(255,255,255,0.05)',

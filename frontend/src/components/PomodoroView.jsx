@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Play, Pause, RotateCcw, Volume2, VolumeX, Coffee, Brain, Timer, Award, PictureInPicture } from 'lucide-react';
 import { sendNotification } from '../utils/notifications';
 
-export function PomodoroView({ tasks }) {
+export function PomodoroView({ tasks, activeTaskId, onClearActiveTaskId }) {
   const isPiPSupported = 'documentPictureInPicture' in window;
   const [pipWindow, setPipWindow] = useState(null);
   const [mode, setMode] = useState('focus'); // 'focus', 'shortBreak', 'longBreak'
@@ -19,6 +19,18 @@ export function PomodoroView({ tasks }) {
       return [];
     }
   });
+  
+  useEffect(() => {
+    if (activeTaskId) {
+      setSelectedTaskId(activeTaskId.toString());
+      setMode('focus');
+      setTimeLeft(25 * 60);
+      setIsRunning(true);
+      if (onClearActiveTaskId) {
+        onClearActiveTaskId();
+      }
+    }
+  }, [activeTaskId, onClearActiveTaskId]);
 
   useEffect(() => {
     try {
