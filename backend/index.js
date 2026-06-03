@@ -148,6 +148,70 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   res.json({ url: imageUrl });
 });
 
+// Helper to compute next date occurrence for recurring tasks
+function getNextOccurrenceDates(dueDateStr, startTimeStr, endTimeStr, recurrenceType) {
+  let baseDate;
+  if (dueDateStr) {
+    baseDate = new Date(dueDateStr + 'T12:00:00'); // mid-day prevents timezone shifts
+  } else if (startTimeStr) {
+    baseDate = new Date(startTimeStr);
+  } else {
+    baseDate = new Date();
+  }
+
+  if (isNaN(baseDate.getTime())) return null;
+
+  const nextDate = new Date(baseDate.getTime());
+
+  if (recurrenceType === 'daily') {
+    nextDate.setDate(nextDate.getDate() + 1);
+  } else if (recurrenceType === 'weekly') {
+    nextDate.setDate(nextDate.getDate() + 7);
+  } else if (recurrenceType === 'monthly') {
+    nextDate.setMonth(nextDate.getMonth() + 1);
+  } else if (recurrenceType === 'weekdays') {
+    do {
+      nextDate.setDate(nextDate.getDate() + 1);
+    } while (nextDate.getDay() === 0 || nextDate.getDay() === 6);
+  } else {
+    return null;
+  }
+
+  const d1 = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+  const d2 = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
+  const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
+  const formatIsoNoZ = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+  const formatDateOnly = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  let nextDueDate = dueDateStr ? formatDateOnly(nextDate) : null;
+  let nextStartTime = null;
+  let nextEndTime = null;
+
+  if (startTimeStr) {
+    const st = new Date(startTimeStr);
+    st.setDate(st.getDate() + diffDays);
+    nextStartTime = formatIsoNoZ(st);
+  }
+  if (endTimeStr) {
+    const et = new Date(endTimeStr);
+    et.setDate(et.getDate() + diffDays);
+    nextEndTime = formatIsoNoZ(et);
+  }
+
+  return {
+    due_date: nextDueDate,
+    start_time: nextStartTime,
+    end_time: nextEndTime
+  };
+}
+
 app.get('/api/debug-version', (req, res) => {
   res.json({ version: 'f933c36' });
 });
@@ -383,11 +447,11 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags } = req.body;
+  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags, recurrence_type } = req.body;
   try {
     const info = await db.prepare(`
-      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       list_id || null, 
       section_id || null, 
@@ -399,7 +463,8 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       priority || 0, 
       req.user.id, 
       team_id || null, 
-      assigned_to || null
+      assigned_to || null,
+      recurrence_type || 'none'
     );
     const taskId = info.lastInsertRowid;
     
@@ -423,7 +488,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
-  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags } = req.body;
+  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags, recurrence_type } = req.body;
   const { id } = req.params;
   try {
     const current = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
@@ -443,9 +508,72 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para actualizar esta tarea.' });
     }
 
+    // Clone recurring task for next occurrence if marked completed
+    const isMarkedCompleted = (is_completed !== undefined && !!is_completed) && !current.is_completed;
+    if (isMarkedCompleted) {
+      const recType = recurrence_type !== undefined ? recurrence_type : current.recurrence_type;
+      if (recType && recType !== 'none') {
+        const nextDates = getNextOccurrenceDates(
+          due_date !== undefined ? due_date : current.due_date,
+          start_time !== undefined ? start_time : current.start_time,
+          end_time !== undefined ? end_time : current.end_time,
+          recType
+        );
+        if (nextDates) {
+          const nextInfo = await db.prepare(`
+            INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            list_id !== undefined ? list_id : current.list_id,
+            section_id !== undefined ? section_id : current.section_id,
+            title !== undefined ? title : current.title,
+            description !== undefined ? description : current.description,
+            nextDates.due_date,
+            nextDates.start_time,
+            nextDates.end_time,
+            priority !== undefined ? priority : current.priority,
+            current.user_id,
+            team_id !== undefined ? team_id : current.team_id,
+            assigned_to !== undefined ? assigned_to : current.assigned_to,
+            recType
+          );
+
+          const nextTaskId = nextInfo.lastInsertRowid;
+
+          // Clone subtasks as pending
+          const subtasks = await db.prepare('SELECT * FROM subtasks WHERE task_id = ?').all(id);
+          for (const st of subtasks) {
+            let stNextDueDate = null;
+            let stNextStartTime = null;
+            let stNextEndTime = null;
+
+            if (st.due_date || st.start_time) {
+              const stDates = getNextOccurrenceDates(st.due_date, st.start_time, st.end_time, recType);
+              if (stDates) {
+                stNextDueDate = stDates.due_date;
+                stNextStartTime = stDates.start_time;
+                stNextEndTime = stDates.end_time;
+              }
+            }
+
+            await db.prepare(`
+              INSERT INTO subtasks (task_id, title, description, is_completed, due_date, start_time, end_time) 
+              VALUES (?, ?, ?, 0, ?, ?, ?)
+            `).run(nextTaskId, st.title, st.description, stNextDueDate, stNextStartTime, stNextEndTime);
+          }
+
+          // Clone tags
+          const tagsList = await db.prepare('SELECT tag_id FROM task_tags WHERE task_id = ?').all(id);
+          for (const t of tagsList) {
+            await db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)').run(nextTaskId, t.tag_id);
+          }
+        }
+      }
+    }
+
     await db.prepare(`
       UPDATE tasks 
-      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, team_id = ?, assigned_to = ? 
+      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, team_id = ?, assigned_to = ?, recurrence_type = ? 
       WHERE id = ?
     `).run(
       list_id !== undefined ? list_id : current.list_id,
@@ -459,6 +587,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       is_completed !== undefined ? is_completed : current.is_completed,
       team_id !== undefined ? team_id : current.team_id,
       assigned_to !== undefined ? assigned_to : current.assigned_to,
+      recurrence_type !== undefined ? recurrence_type : current.recurrence_type,
       id
     );
 

@@ -1347,6 +1347,47 @@ export function TaskDetail({ task, subtask, sections = [], allTasks = [], extern
                 <option value="0" style={{ background: 'var(--right-pane-bg)' }}>⚪ No Urgente y No Importante (Eliminar)</option>
               </select>
             )}
+
+            {/* Recurrencia */}
+            <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Repetir (Recurrencia):
+              </span>
+              <select
+                value={task.recurrence_type || 'none'}
+                onChange={async (e) => {
+                  const recVal = e.target.value;
+                  try {
+                    await fetch(`/api/tasks/${task.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ recurrence_type: recVal })
+                    });
+                    onUpdate();
+                  } catch (err) {
+                    console.error('Error updating recurrence:', err);
+                  }
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  width: '100%',
+                  marginTop: '4px'
+                }}
+              >
+                <option value="none" style={{ background: 'var(--right-pane-bg)' }}>🔄 No repetir</option>
+                <option value="daily" style={{ background: 'var(--right-pane-bg)' }}>📅 Diariamente</option>
+                <option value="weekly" style={{ background: 'var(--right-pane-bg)' }}>🗓️ Semanalmente</option>
+                <option value="monthly" style={{ background: 'var(--right-pane-bg)' }}>📆 Mensualmente</option>
+                <option value="weekdays" style={{ background: 'var(--right-pane-bg)' }}>💼 De lunes a viernes (Días hábiles)</option>
+              </select>
+            </div>
           </div>
         )}
         

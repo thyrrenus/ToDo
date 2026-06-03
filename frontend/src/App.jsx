@@ -193,6 +193,22 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     end_time = `${resolvedEndDate}T${pad(endHr)}:${pad(minutes || 0)}:00`;
   }
 
+  // 5. Extract recurrence
+  let recurrence_type = 'none';
+  if (/\b(?:cada día|diariamente|todos los días|cada dia)\b/i.test(title)) {
+    recurrence_type = 'daily';
+    title = title.replace(/\b(?:cada día|diariamente|todos los días|cada dia)\b/i, '');
+  } else if (/\b(?:cada semana|semanalmente)\b/i.test(title)) {
+    recurrence_type = 'weekly';
+    title = title.replace(/\b(?:cada semana|semanalmente)\b/i, '');
+  } else if (/\b(?:cada mes|mensualmente)\b/i.test(title)) {
+    recurrence_type = 'monthly';
+    title = title.replace(/\b(?:cada mes|mensualmente)\b/i, '');
+  } else if (/\b(?:de lunes a viernes|días laborables|dias laborables|días de semana|dias de semana)\b/i.test(title)) {
+    recurrence_type = 'weekdays';
+    title = title.replace(/\b(?:de lunes a viernes|días laborables|dias laborables|días de semana|dias de semana)\b/i, '');
+  }
+
   // Clean remaining extra spaces in title
   title = title.replace(/\s+/g, ' ').trim();
   if (!title) {
@@ -206,7 +222,8 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     due_date,
     start_time,
     end_time,
-    tags
+    tags,
+    recurrence_type
   };
 }
 

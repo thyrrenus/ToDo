@@ -107,6 +107,7 @@ const initDb = async () => {
       end_time DATETIME,
       priority INTEGER DEFAULT 0,
       is_completed BOOLEAN DEFAULT 0,
+      recurrence_type TEXT DEFAULT 'none',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (list_id) REFERENCES lists(id),
       FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
@@ -202,6 +203,7 @@ const initDb = async () => {
      ALTER TABLE lists ADD COLUMN group_id INTEGER REFERENCES list_groups(id) ON DELETE SET NULL;
      ALTER TABLE lists ADD COLUMN icon TEXT;
      ALTER TABLE list_groups ADD COLUMN icon TEXT;
+     ALTER TABLE tasks ADD COLUMN recurrence_type TEXT DEFAULT 'none';
    `);
 
   // 3. Ensure a default list if empty

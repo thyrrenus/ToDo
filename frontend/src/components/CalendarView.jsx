@@ -31,6 +31,7 @@ export function CalendarView({
   const [quickTitle, setQuickTitle] = useState('');
   const [quickListId, setQuickListId] = useState('');
   const [quickPriority, setQuickPriority] = useState('0');
+  const [quickRecurrence, setQuickRecurrence] = useState('none');
 
   const getListColor = (listId) => {
     if (!listId) return '#5b21b6'; // Default color
@@ -260,6 +261,7 @@ export function CalendarView({
         setQuickTitle('');
         setQuickListId(lists[0]?.id || '');
         setQuickPriority('0');
+        setQuickRecurrence('none');
       }
       setContextMenu(null);
       setHoveredEvent(null);
@@ -288,7 +290,8 @@ export function CalendarView({
       priority: parseInt(quickPriority, 10),
       start_time: startTimeStr,
       end_time: endTimeStr,
-      due_date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`
+      due_date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+      recurrence_type: quickRecurrence
     };
 
     if (onAddTask) {
@@ -1019,6 +1022,29 @@ export function CalendarView({
               <option value="2" style={{ background: '#1c1917' }}>🟡 Importante</option>
               <option value="1" style={{ background: '#1c1917' }}>🔵 Delegar</option>
               <option value="0" style={{ background: '#1c1917' }}>⚪ Ninguna</option>
+            </select>
+          </div>
+          <div className="quick-create-field" style={{ marginBottom: '10px' }}>
+            <select 
+              value={quickRecurrence} 
+              onChange={(e) => setQuickRecurrence(e.target.value)}
+              style={{
+                width: '100%',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                padding: '4px 6px',
+                color: 'var(--text-primary)',
+                fontSize: '0.75rem',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="none" style={{ background: '#1c1917' }}>🔄 No repetir</option>
+              <option value="daily" style={{ background: '#1c1917' }}>📅 Diariamente</option>
+              <option value="weekly" style={{ background: '#1c1917' }}>🗓️ Semanalmente</option>
+              <option value="monthly" style={{ background: '#1c1917' }}>📆 Mensualmente</option>
+              <option value="weekdays" style={{ background: '#1c1917' }}>💼 Lunes a Viernes</option>
             </select>
           </div>
           <div className="quick-create-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
