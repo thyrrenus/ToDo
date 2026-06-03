@@ -740,6 +740,7 @@ function App() {
   const [externalEvents, setExternalEvents] = useState([]);
   const [externalEventsError, setExternalEventsError] = useState(null);
   const [outlookIcalUrl, setOutlookIcalUrl] = useState(() => {
+    if (user?.outlook_ical_url) return user.outlook_ical_url;
     const userId = user?.id;
     if (!userId) return '';
     const scopedSaved = localStorage.getItem(`outlookIcalUrl_${userId}`);
@@ -1239,7 +1240,7 @@ function App() {
     // Fetch external events on app mount
     const userId = user?.id;
     if (userId) {
-      const url = localStorage.getItem(`outlookIcalUrl_${userId}`);
+      const url = user.outlook_ical_url || localStorage.getItem(`outlookIcalUrl_${userId}`);
       if (url) {
         setOutlookIcalUrl(url);
         fetchExternalEvents(url);
@@ -1304,12 +1305,17 @@ function App() {
   }, [token]);
 
   useEffect(() => {
-    if (mainView === 'calendar' && user?.id) {
-      const url = localStorage.getItem(`outlookIcalUrl_${user.id}`) || '';
+    if (user?.id) {
+      const url = user.outlook_ical_url || localStorage.getItem(`outlookIcalUrl_${user.id}`) || '';
       setOutlookIcalUrl(url);
-      fetchExternalEvents(url);
+      if (mainView === 'calendar') {
+        fetchExternalEvents(url);
+      }
+    } else {
+      setOutlookIcalUrl('');
+      setExternalEvents([]);
     }
-  }, [mainView, user]);
+  }, [user, mainView]);
 
   const handleToggleTask = async (id, currentStatus) => {
     try {
@@ -2283,12 +2289,18 @@ function App() {
           ) : mainView === 'settings' ? (
             <SettingsView 
               user={user}
+              onUpdateUser={(updatedUser, newToken) => {
+                localStorage.setItem('todo_user', JSON.stringify(updatedUser));
+                localStorage.setItem('todo_token', newToken);
+                setUser(updatedUser);
+                setToken(newToken);
+              }}
               tasks={tasks}
               lists={lists}
               onRefreshTasks={() => {
                 fetchTasks();
                 if (user?.id) {
-                  const url = localStorage.getItem(`outlookIcalUrl_${user.id}`) || '';
+                  const url = user.outlook_ical_url || localStorage.getItem(`outlookIcalUrl_${user.id}`) || '';
                   setOutlookIcalUrl(url);
                   fetchExternalEvents(url);
                 }

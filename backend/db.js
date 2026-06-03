@@ -76,6 +76,7 @@ const initDb = async () => {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT DEFAULT 'user',
+      outlook_ical_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -204,6 +205,7 @@ const initDb = async () => {
      ALTER TABLE lists ADD COLUMN icon TEXT;
      ALTER TABLE list_groups ADD COLUMN icon TEXT;
      ALTER TABLE tasks ADD COLUMN recurrence_type TEXT DEFAULT 'none';
+     ALTER TABLE users ADD COLUMN outlook_ical_url TEXT;
    `);
 
   // 3. Ensure a default list if empty

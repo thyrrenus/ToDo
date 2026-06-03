@@ -74,7 +74,7 @@ app.post('/api/auth/register', async (req, res) => {
       await db.prepare("INSERT INTO lists (name, color, user_id) VALUES ('Inbox', '#3b82f6', ?)").run(userId);
     }
 
-    const newUser = await db.prepare('SELECT id, username, email, role FROM users WHERE id = ?').get(userId);
+    const newUser = await db.prepare('SELECT id, username, email, role, outlook_ical_url FROM users WHERE id = ?').get(userId);
     const token = jwt.sign(newUser, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({ token, user: newUser });
@@ -103,7 +103,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Credenciales inválidas.' });
     }
 
-    const userData = { id: user.id, username: user.username, email: user.email, role: user.role };
+    const userData = { id: user.id, username: user.username, email: user.email, role: user.role, outlook_ical_url: user.outlook_ical_url };
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({ token, user: userData });
@@ -115,6 +115,19 @@ app.post('/api/auth/login', async (req, res) => {
 // 3. Get Authenticated User Details (Check Session)
 app.get('/api/auth/me', authenticateToken, (req, res) => {
   res.json({ user: req.user });
+});
+
+// 4. Update User Profile Settings (such as iCal link)
+app.put('/api/users/profile', authenticateToken, async (req, res) => {
+  const { outlook_ical_url } = req.body;
+  try {
+    await db.prepare('UPDATE users SET outlook_ical_url = ? WHERE id = ?').run(outlook_ical_url, req.user.id);
+    const updatedUser = await db.prepare('SELECT id, username, email, role, outlook_ical_url FROM users WHERE id = ?').get(req.user.id);
+    const token = jwt.sign(updatedUser, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ success: true, user: updatedUser, token });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Setup uploads directory

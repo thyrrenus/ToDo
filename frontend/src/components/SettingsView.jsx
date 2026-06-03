@@ -9,7 +9,7 @@ import {
   sendNotification 
 } from '../utils/notifications';
 
-export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
+export function SettingsView({ user, onUpdateUser, tasks, lists, onRefreshTasks }) {
   // --- LOAD FROM LOCAL STORAGE OR SET DEFAULTS ---
   const [userName, setUserName] = useState(() => localStorage.getItem('userName') || 'Carlos');
   const [dailyTaskLimit, setDailyTaskLimit] = useState(() => parseInt(localStorage.getItem('dailyTaskLimit') || '5'));
@@ -301,7 +301,7 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
   }, [accentColor, bgStyle]);
 
   // Save changes handler
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     localStorage.setItem('userName', userName);
     localStorage.setItem('dailyTaskLimit', dailyTaskLimit.toString());
     localStorage.setItem('pomodoroWork', pomodoroWork.toString());
@@ -314,6 +314,21 @@ export function SettingsView({ user, tasks, lists, onRefreshTasks }) {
     localStorage.setItem('appBgStyle', bgStyle);
     if (user) {
       localStorage.setItem(`outlookIcalUrl_${user.id}`, outlookIcalUrl);
+      try {
+        const res = await fetch('/api/users/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outlook_ical_url: outlookIcalUrl })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && onUpdateUser && data.user && data.token) {
+            onUpdateUser(data.user, data.token);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync iCal URL with server:', err);
+      }
     } else {
       localStorage.setItem('outlookIcalUrl', outlookIcalUrl);
     }
