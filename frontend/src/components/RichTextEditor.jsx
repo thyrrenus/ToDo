@@ -31,6 +31,7 @@ const slashCommands = [
   { key: 'code', label: 'Bloque de código', desc: 'Texto monosegmentado', format: 'code-block', value: true, type: 'format' },
   { key: 'callout', label: 'Caja destacada', desc: 'Contenedor sutil destacado', format: 'blockquote', value: true, type: 'format' },
   { key: 'collapsible', label: 'Sección colapsable', desc: 'Acordeón de texto ocultable', type: 'action', action: 'collapsible' },
+  { key: 'table', label: 'Tabla', desc: 'Insertar tabla de 3x3', type: 'action', action: 'table' },
   { key: 'divider', label: 'Línea divisora', desc: 'Línea horizontal sutil', type: 'action', action: 'divider' },
   { key: 'clean', label: 'Limpiar formato', desc: 'Quita todo el formato', type: 'action', action: 'clean' }
 ];
@@ -103,7 +104,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       handlers: {
         image: imageHandler
       }
-    }
+    },
+    table: true
   }), []);
 
   const filteredOptions = useMemo(() => {
@@ -224,6 +226,59 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     if (range) {
       quill.insertText(range.index, '────────────────────────────────────────\n');
     }
+  };
+
+  const insertTable = () => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+    const tableModule = quill.getModule('table');
+    if (tableModule) {
+      tableModule.insertTable(3, 3);
+    }
+    setShowContextMenu(false);
+  };
+
+  const getIsCursorInTable = () => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return false;
+    
+    // Check Quill format
+    const formats = quill.getFormat();
+    if (formats && formats.table) return true;
+
+    // Check DOM path
+    try {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        let node = selection.getRangeAt(0).startContainer;
+        while (node && node !== quill.root) {
+          if (node.nodeName === 'TD' || node.nodeName === 'TH' || node.nodeName === 'TABLE') {
+            return true;
+          }
+          node = node.parentNode;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
+
+  const handleTableAction = (action) => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+    const tableModule = quill.getModule('table');
+    if (!tableModule) return;
+
+    if (action === 'insertRowAbove') tableModule.insertRowAbove();
+    else if (action === 'insertRowBelow') tableModule.insertRowBelow();
+    else if (action === 'insertColumnLeft') tableModule.insertColumnLeft();
+    else if (action === 'insertColumnRight') tableModule.insertColumnRight();
+    else if (action === 'deleteRow') tableModule.deleteRow();
+    else if (action === 'deleteColumn') tableModule.deleteColumn();
+    else if (action === 'deleteTable') tableModule.deleteTable();
+
+    setShowContextMenu(false);
   };
 
   const triggerMention = (char) => {
@@ -481,7 +536,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         /^\s*(#|\*|-|>|\d+\.)\s/m.test(pastedText) || 
         /\*\*|~~|`|\[.*?\]\(.*?\)/.test(pastedText) ||
         pastedText.includes('```') ||
-        pastedText.includes('>>>')
+        pastedText.includes('>>>') ||
+        /\|.*\|/.test(pastedText)
       );
 
       if (isMd) {
@@ -667,6 +723,11 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         quill.insertText(lineIndex, '────────────────────────────────────────\n');
       } else if (option.action === 'collapsible') {
         quill.clipboard.dangerouslyPasteHTML(lineIndex, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>');
+      } else if (option.action === 'table') {
+        const tableModule = quill.getModule('table');
+        if (tableModule) {
+          tableModule.insertTable(3, 3);
+        }
       } else if (option.action === 'clean') {
         quill.removeFormat(lineIndex, line.length() - cursorOffset);
       }
@@ -781,6 +842,36 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {getIsCursorInTable() && (
+            <div className="context-menu-submenu-header">
+              <span>📊 Tabla</span>
+              <div className="context-menu-submenu">
+                <div className="context-menu-item" onClick={() => handleTableAction('insertRowAbove')}>
+                  <span>Insertar fila arriba</span>
+                </div>
+                <div className="context-menu-item" onClick={() => handleTableAction('insertRowBelow')}>
+                  <span>Insertar fila abajo</span>
+                </div>
+                <div className="context-menu-item" onClick={() => handleTableAction('insertColumnLeft')}>
+                  <span>Insertar columna izquierda</span>
+                </div>
+                <div className="context-menu-item" onClick={() => handleTableAction('insertColumnRight')}>
+                  <span>Insertar columna derecha</span>
+                </div>
+                <div className="context-menu-divider" />
+                <div className="context-menu-item" onClick={() => handleTableAction('deleteRow')}>
+                  <span>Eliminar fila</span>
+                </div>
+                <div className="context-menu-item" onClick={() => handleTableAction('deleteColumn')}>
+                  <span>Eliminar columna</span>
+                </div>
+                <div className="context-menu-item danger" onClick={() => handleTableAction('deleteTable')}>
+                  <span>Eliminar tabla</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="context-menu-submenu-header">
             <span>✍️ Formato</span>
             <div className="context-menu-submenu">
@@ -817,6 +908,10 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
               <div className="context-menu-item" onClick={toggleCodeBlock}>
                 <span>Bloque de código</span>
                 <span style={{ opacity: 0.5, fontSize: '0.7rem' }}>```</span>
+              </div>
+              <div className="context-menu-item" onClick={insertTable}>
+                <span>Tabla</span>
+                <span style={{ opacity: 0.5, fontSize: '0.7rem' }}>/tabla</span>
               </div>
               <div className="context-menu-item" onClick={insertDivider}>
                 <span>Línea divisora</span>
@@ -987,34 +1082,67 @@ export function markdownToHtml(md) {
   let inList = false;
   let listType = ''; // 'ul' or 'ol'
   let inCodeBlock = false;
+  let inTable = false;
+  let tableRows = [];
+
+  const flushTable = () => {
+    if (tableRows.length > 0) {
+      html += renderMarkdownTable(tableRows);
+      tableRows = [];
+    }
+    inTable = false;
+  };
+
+  const flushList = () => {
+    if (inList) {
+      html += listType === 'ul' ? '</ul>' : '</ol>';
+      inList = false;
+      listType = '';
+    }
+  };
 
   for (let line of lines) {
     // 1. Code Blocks
-    if (line.trim().startsWith('```')) {
-      if (inCodeBlock) {
+    if (inCodeBlock) {
+      if (line.trim().startsWith('```')) {
         html += '</pre>';
         inCodeBlock = false;
       } else {
-        html += '<pre class="ql-syntax">';
-        inCodeBlock = true;
+        const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        html += escaped + '\n';
       }
       continue;
     }
 
-    if (inCodeBlock) {
-      const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      html += escaped + '\n';
+    if (line.trim().startsWith('```')) {
+      flushTable();
+      flushList();
+      html += '<pre class="ql-syntax">';
+      inCodeBlock = true;
       continue;
+    }
+
+    // Check if table row
+    const isTableRow = line.trim().startsWith('|') && line.trim().endsWith('|');
+    if (isTableRow) {
+      flushList();
+      inTable = true;
+      tableRows.push(line.trim());
+      continue;
+    } else {
+      flushTable();
     }
 
     // 2. Blockquotes / Accordions
     if (line.startsWith('> ')) {
+      flushList();
       const content = line.slice(2);
       html += `<blockquote>${parseInlineMarkdown(content)}</blockquote>`;
       continue;
     }
 
     if (line.startsWith('>>> ')) {
+      flushList();
       const title = line.slice(4).trim();
       html += `<details><summary>${parseInlineMarkdown(title)}</summary><p>Escribe aquí el contenido...</p></details>`;
       continue;
@@ -1022,14 +1150,17 @@ export function markdownToHtml(md) {
 
     // 3. Headings
     if (line.startsWith('# ')) {
+      flushList();
       html += `<h1>${parseInlineMarkdown(line.slice(2))}</h1>`;
       continue;
     }
     if (line.startsWith('## ')) {
+      flushList();
       html += `<h2>${parseInlineMarkdown(line.slice(3))}</h2>`;
       continue;
     }
     if (line.startsWith('### ')) {
+      flushList();
       html += `<h3>${parseInlineMarkdown(line.slice(4))}</h3>`;
       continue;
     }
@@ -1037,7 +1168,7 @@ export function markdownToHtml(md) {
     // 4. Unordered Lists
     if (line.startsWith('* ') || line.startsWith('- ')) {
       if (!inList || listType !== 'ul') {
-        if (inList) html += listType === 'ul' ? '</ul>' : '</ol>';
+        flushList();
         html += '<ul>';
         inList = true;
         listType = 'ul';
@@ -1050,7 +1181,7 @@ export function markdownToHtml(md) {
     const olMatch = /^\d+\.\s(.*)/.exec(line);
     if (olMatch) {
       if (!inList || listType !== 'ol') {
-        if (inList) html += listType === 'ul' ? '</ul>' : '</ol>';
+        flushList();
         html += '<ol>';
         inList = true;
         listType = 'ol';
@@ -1061,32 +1192,74 @@ export function markdownToHtml(md) {
 
     // Close list if blank line
     if (line.trim() === '') {
-      if (inList) {
-        html += listType === 'ul' ? '</ul>' : '</ol>';
-        inList = false;
-        listType = '';
-      }
+      flushList();
       html += '<p><br></p>';
       continue;
     }
 
-    if (inList) {
-      html += listType === 'ul' ? '</ul>' : '</ol>';
-      inList = false;
-      listType = '';
-    }
-
+    flushList();
     html += `<p>${parseInlineMarkdown(line)}</p>`;
   }
 
-  if (inList) {
-    html += listType === 'ul' ? '</ul>' : '</ol>';
-  }
+  flushTable();
+  flushList();
   if (inCodeBlock) {
     html += '</pre>';
   }
 
   return html;
+}
+
+function renderMarkdownTable(rows) {
+  if (rows.length === 0) return '';
+  
+  const parseRow = (rowLine) => {
+    let s = rowLine.trim();
+    if (s.startsWith('|')) s = s.slice(1);
+    if (s.endsWith('|')) s = s.slice(0, -1);
+    return s.split('|').map(cell => cell.trim());
+  };
+
+  const headers = parseRow(rows[0]);
+  let startIndex = 1;
+  
+  // Check if second row is divider
+  if (rows.length > 1) {
+    const secondRowCells = parseRow(rows[1]);
+    const isDivider = secondRowCells.length > 0 && secondRowCells.every(c => /^[:\-\s]+$/.test(c) && c.includes('-'));
+    if (isDivider) {
+      startIndex = 2;
+    }
+  }
+
+  let tableHtml = '<table class="ql-table"><tbody>';
+  
+  // Render headers
+  tableHtml += '<tr>';
+  headers.forEach(h => {
+    tableHtml += `<td class="ql-table-cell"><strong>${parseInlineMarkdown(h)}</strong></td>`;
+  });
+  tableHtml += '</tr>';
+
+  // Render cells
+  for (let i = startIndex; i < rows.length; i++) {
+    const rowLine = rows[i].trim();
+    // Skip divider row if encountered later
+    const rowCellsForCheck = parseRow(rowLine);
+    const isDivider = rowCellsForCheck.length > 0 && rowCellsForCheck.every(c => /^[:\-\s]+$/.test(c) && c.includes('-'));
+    if (isDivider) continue;
+
+    const cells = parseRow(rowLine);
+    tableHtml += '<tr>';
+    for (let j = 0; j < headers.length; j++) {
+      const val = cells[j] || '';
+      tableHtml += `<td class="ql-table-cell">${parseInlineMarkdown(val)}</td>`;
+    }
+    tableHtml += '</tr>';
+  }
+
+  tableHtml += '</tbody></table>';
+  return tableHtml;
 }
 
 function parseInlineMarkdown(text) {
@@ -1162,6 +1335,37 @@ function nodeToMarkdown(node) {
         break;
       case 'code':
         md += `\`${nodeToMarkdown(child)}\``;
+        break;
+      case 'table':
+        const trs = Array.from(child.querySelectorAll('tr'));
+        if (trs.length > 0) {
+          let tableMd = '';
+          const rowData = trs.map(tr => {
+            const cells = Array.from(tr.querySelectorAll('td, th'));
+            return cells.map(cell => nodeToMarkdown(cell).trim().replace(/\n/g, ' '));
+          });
+          
+          if (rowData.length > 0) {
+            const headers = rowData[0];
+            tableMd += `| ${headers.join(' | ')} |\n`;
+            
+            const dividers = headers.map(() => '---');
+            tableMd += `| ${dividers.join(' | ')} |\n`;
+            
+            for (let i = 1; i < rowData.length; i++) {
+              tableMd += `| ${rowData[i].join(' | ')} |\n`;
+            }
+            tableMd += '\n';
+          }
+          md += tableMd;
+        }
+        break;
+      case 'tbody':
+      case 'thead':
+      case 'tr':
+      case 'td':
+      case 'th':
+        // Handled by case 'table'
         break;
       case 'pre':
         md += `\`\`\`\n${child.textContent.replace(/\n$/, '')}\n\`\`\`\n\n`;
