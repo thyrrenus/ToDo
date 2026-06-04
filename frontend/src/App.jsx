@@ -477,6 +477,35 @@ function App() {
   }); // 'inbox', 'today', 'upcoming' or list ID
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState(null);
+  const [rightPaneWidth, setRightPaneWidth] = useState(() => {
+    return parseInt(localStorage.getItem('rightPaneWidth') || '350', 10);
+  });
+
+  const startResizing = (mouseDownEvent) => {
+    mouseDownEvent.preventDefault();
+    const startWidth = rightPaneWidth;
+    const startX = mouseDownEvent.clientX;
+
+    const doDrag = (mouseMoveEvent) => {
+      let newWidth = startWidth + (startX - mouseMoveEvent.clientX);
+      if (newWidth < 280) newWidth = 280;
+      if (newWidth > window.innerWidth - 300) newWidth = window.innerWidth - 300;
+      if (newWidth > 800) newWidth = 800;
+
+      setRightPaneWidth(newWidth);
+      localStorage.setItem('rightPaneWidth', newWidth.toString());
+    };
+
+    const stopDrag = () => {
+      document.removeEventListener('mousemove', doDrag);
+      document.removeEventListener('mouseup', stopDrag);
+      document.body.style.cursor = '';
+    };
+
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mouseup', stopDrag);
+    document.body.style.cursor = 'ew-resize';
+  };
   const [loading, setLoading] = useState(true);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -2343,7 +2372,11 @@ function App() {
         </main>
 
         {(selectedTask || selectedSubtask) && (
-          <aside className="right-pane">
+          <aside className="right-pane" style={{ width: `${rightPaneWidth}px`, position: 'relative' }}>
+            <div 
+              className="pane-resize-handle"
+              onMouseDown={startResizing}
+            />
             <TaskDetail 
               task={selectedTask}
               subtask={selectedSubtask}

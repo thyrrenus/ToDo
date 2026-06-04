@@ -370,13 +370,29 @@ body {
 
 /* Right Pane (Task Details) */
 .right-pane {
-  width: 350px;
   background: var(--right-pane-bg);
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   animation: slideInRight 0.3s ease;
+}
+
+.pane-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 1000;
+  background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.pane-resize-handle:hover,
+.pane-resize-handle:active {
+  background-color: var(--accent-hover);
 }
 
 @keyframes slideInRight {
