@@ -512,6 +512,7 @@ function App() {
   const [listeningSource, setListeningSource] = useState('');
   const [isReadingAgenda, setIsReadingAgenda] = useState(false);
   const [activeRequests, setActiveRequests] = useState(0);
+  const [syncingTaskIds, setSyncingTaskIds] = useState(new Set());
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -1371,27 +1372,49 @@ function App() {
   }, [user, mainView]);
 
   const handleToggleTask = async (id, currentStatus) => {
+    setSyncingTaskIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     try {
       const res = await fetch(`/api/tasks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_completed: !currentStatus ? 1 : 0 })
       });
-      if (res.ok) fetchTasks();
+      if (res.ok) await fetchTasks();
     } catch (err) {
       console.error(err);
+    } finally {
+      setSyncingTaskIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
   const handleDeleteTask = async (id) => {
+    setSyncingTaskIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
       if (res.ok) {
         if (selectedTaskId === id) setSelectedTaskId(null);
-        fetchTasks();
+        await fetchTasks();
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setSyncingTaskIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -2148,6 +2171,7 @@ function App() {
                             task={task} 
                             isSelected={selectedTaskId === task.id}
                             selectedSubtaskId={selectedSubtaskId}
+                            isSyncing={syncingTaskIds.has(task.id)}
                             onClick={() => {
                               setSelectedTaskId(task.id);
                               setSelectedSubtaskId(null);
@@ -2225,6 +2249,7 @@ function App() {
                                 task={task} 
                                 isSelected={selectedTaskId === task.id}
                                 selectedSubtaskId={selectedSubtaskId}
+                                isSyncing={syncingTaskIds.has(task.id)}
                                 onClick={() => {
                                   setSelectedTaskId(task.id);
                                   setSelectedSubtaskId(null);
@@ -2266,6 +2291,7 @@ function App() {
                         task={task} 
                         isSelected={selectedTaskId === task.id}
                         selectedSubtaskId={selectedSubtaskId}
+                        isSyncing={syncingTaskIds.has(task.id)}
                         onClick={() => {
                           setSelectedTaskId(task.id);
                           setSelectedSubtaskId(null);

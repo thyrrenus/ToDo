@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu }) {
+export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu, isSyncing }) {
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [localSyncingSubtaskIds, setLocalSyncingSubtaskIds] = useState(new Set());
 
   const isCompleted = task.is_completed === 1 || task.is_completed === true;
   const subtasks = task.subtasks || [];
@@ -37,6 +38,11 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
   };
 
   const handleToggleSubtask = async (subtaskId, currentStatus) => {
+    setLocalSyncingSubtaskIds(prev => {
+      const next = new Set(prev);
+      next.add(subtaskId);
+      return next;
+    });
     try {
       const res = await fetch(`/api/subtasks/${subtaskId}`, {
         method: 'PUT',
@@ -46,6 +52,12 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
       if (res.ok && onSubtaskAdded) onSubtaskAdded();
     } catch (err) {
       console.error(err);
+    } finally {
+      setLocalSyncingSubtaskIds(prev => {
+        const next = new Set(prev);
+        next.delete(subtaskId);
+        return next;
+      });
     }
   };
 
@@ -94,8 +106,19 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
           )}
         </div>
 
-        <div className="checkbox" onClick={(e) => { e.stopPropagation(); onToggle(); }}>
-          {isCompleted && <Check size={14} color="#0f1115" />}
+        <div 
+          className={`checkbox ${isSyncing ? 'syncing' : ''}`} 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            if (!isSyncing) onToggle(); 
+          }}
+          style={isSyncing ? { pointerEvents: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}}
+        >
+          {isSyncing ? (
+            <div className="checkbox-spinner" />
+          ) : (
+            isCompleted && <Check size={14} color="#0f1115" />
+          )}
         </div>
         
         <div className="task-content">
@@ -186,6 +209,7 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
           {subtasks.map(st => {
             const stCompleted = st.is_completed === 1 || st.is_completed === true;
             const isSubtaskSelected = selectedSubtaskId === st.id;
+            const isSubtaskSyncing = localSyncingSubtaskIds.has(st.id);
             return (
               <div 
                 key={st.id} 
@@ -196,10 +220,18 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
                 }}
               >
                 <div 
-                  className="checkbox subtask-checkbox" 
-                  onClick={(e) => { e.stopPropagation(); handleToggleSubtask(st.id, st.is_completed); }}
+                  className={`checkbox subtask-checkbox ${isSubtaskSyncing ? 'syncing' : ''}`} 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (!isSubtaskSyncing) handleToggleSubtask(st.id, st.is_completed); 
+                  }}
+                  style={isSubtaskSyncing ? { pointerEvents: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}}
                 >
-                  {stCompleted && <Check size={10} color="#0f1115" />}
+                  {isSubtaskSyncing ? (
+                    <div className="checkbox-spinner" style={{ width: 8, height: 8 }} />
+                  ) : (
+                    stCompleted && <Check size={10} color="#0f1115" />
+                  )}
                 </div>
                 <span className="subtask-title-text">{st.title}</span>
                 {st.due_date && (
