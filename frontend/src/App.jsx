@@ -511,6 +511,30 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const [listeningSource, setListeningSource] = useState('');
   const [isReadingAgenda, setIsReadingAgenda] = useState(false);
+  const [activeRequests, setActiveRequests] = useState(0);
+
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const isApiCall = typeof args[0] === 'string' && args[0].includes('/api/');
+      
+      if (isApiCall) {
+        setActiveRequests(prev => prev + 1);
+      }
+      
+      try {
+        return await originalFetch(...args);
+      } finally {
+        if (isApiCall) {
+          setActiveRequests(prev => Math.max(0, prev - 1));
+        }
+      }
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
 
   const startSpeechRecognition = (source) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2585,6 +2609,14 @@ function App() {
             </div>
           ))}
         </div>
+
+        {/* Global Syncing Indicator */}
+        {activeRequests > 0 && (
+          <div className="syncing-indicator">
+            <div className="sync-spinner" />
+            <span>Sincronizando...</span>
+          </div>
+        )}
       </div>
     </div>
   );
