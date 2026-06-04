@@ -104,8 +104,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       handlers: {
         image: imageHandler
       }
-    },
-    table: true
+    }
   }), []);
 
   const filteredOptions = useMemo(() => {
@@ -231,9 +230,30 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   const insertTable = () => {
     const quill = quillRef.current?.getEditor();
     if (!quill) return;
-    const tableModule = quill.getModule('table');
-    if (tableModule) {
-      tableModule.insertTable(3, 3);
+    const range = quill.getSelection(true);
+    if (range) {
+      const tableHtml = `
+        <table class="ql-table">
+          <tbody>
+            <tr>
+              <td class="ql-table-cell"><strong>Cabecera 1</strong></td>
+              <td class="ql-table-cell"><strong>Cabecera 2</strong></td>
+              <td class="ql-table-cell"><strong>Cabecera 3</strong></td>
+            </tr>
+            <tr>
+              <td class="ql-table-cell"><br></td>
+              <td class="ql-table-cell"><br></td>
+              <td class="ql-table-cell"><br></td>
+            </tr>
+            <tr>
+              <td class="ql-table-cell"><br></td>
+              <td class="ql-table-cell"><br></td>
+              <td class="ql-table-cell"><br></td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      quill.clipboard.dangerouslyPasteHTML(range.index, tableHtml);
     }
     setShowContextMenu(false);
   };
@@ -242,10 +262,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     const quill = quillRef.current?.getEditor();
     if (!quill) return false;
     
-    // Check Quill format
-    const formats = quill.getFormat();
-    if (formats && formats.table) return true;
-
     // Check DOM path
     try {
       const selection = window.getSelection();
@@ -267,16 +283,73 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   const handleTableAction = (action) => {
     const quill = quillRef.current?.getEditor();
     if (!quill) return;
-    const tableModule = quill.getModule('table');
-    if (!tableModule) return;
 
-    if (action === 'insertRowAbove') tableModule.insertRowAbove();
-    else if (action === 'insertRowBelow') tableModule.insertRowBelow();
-    else if (action === 'insertColumnLeft') tableModule.insertColumnLeft();
-    else if (action === 'insertColumnRight') tableModule.insertColumnRight();
-    else if (action === 'deleteRow') tableModule.deleteRow();
-    else if (action === 'deleteColumn') tableModule.deleteColumn();
-    else if (action === 'deleteTable') tableModule.deleteTable();
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    let node = selection.getRangeAt(0).startContainer;
+    const td = node.nodeType === Node.ELEMENT_NODE ? node.closest('td') : node.parentElement?.closest('td');
+    if (!td) return;
+
+    const tr = td.closest('tr');
+    const table = td.closest('table');
+    if (!tr || !table) return;
+
+    const cellIndex = td.cellIndex;
+
+    if (action === 'insertRowAbove' || action === 'insertRowBelow') {
+      const newTr = document.createElement('tr');
+      const numCols = tr.cells.length;
+      for (let i = 0; i < numCols; i++) {
+        const newTd = document.createElement('td');
+        newTd.className = 'ql-table-cell';
+        newTd.innerHTML = '<br>';
+        newTr.appendChild(newTd);
+      }
+      if (action === 'insertRowAbove') {
+        table.tBodies[0].insertBefore(newTr, tr);
+      } else {
+        table.tBodies[0].insertBefore(newTr, tr.nextSibling);
+      }
+    } else if (action === 'insertColumnLeft' || action === 'insertColumnRight') {
+      const rows = Array.from(table.querySelectorAll('tr'));
+      rows.forEach(r => {
+        const newTd = document.createElement('td');
+        newTd.className = 'ql-table-cell';
+        newTd.innerHTML = '<br>';
+        const targetCell = r.cells[cellIndex];
+        if (action === 'insertColumnLeft') {
+          r.insertBefore(newTd, targetCell);
+        } else {
+          r.insertBefore(newTd, targetCell ? targetCell.nextSibling : null);
+        }
+      });
+    } else if (action === 'deleteRow') {
+      if (table.querySelectorAll('tr').length <= 1) {
+        table.remove();
+      } else {
+        tr.remove();
+      }
+    } else if (action === 'deleteColumn') {
+      const rows = Array.from(table.querySelectorAll('tr'));
+      const numCols = tr.cells.length;
+      if (numCols <= 1) {
+        table.remove();
+      } else {
+        rows.forEach(r => {
+          const targetCell = r.cells[cellIndex];
+          if (targetCell) targetCell.remove();
+        });
+      }
+    } else if (action === 'deleteTable') {
+      table.remove();
+    }
+
+    const newHtml = quill.root.innerHTML;
+    quill.setContents(quill.clipboard.convert(newHtml));
+    
+    if (onChange) {
+      onChange(newHtml);
+    }
 
     setShowContextMenu(false);
   };
@@ -724,10 +797,28 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       } else if (option.action === 'collapsible') {
         quill.clipboard.dangerouslyPasteHTML(lineIndex, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>');
       } else if (option.action === 'table') {
-        const tableModule = quill.getModule('table');
-        if (tableModule) {
-          tableModule.insertTable(3, 3);
-        }
+        const tableHtml = `
+          <table class="ql-table">
+            <tbody>
+              <tr>
+                <td class="ql-table-cell"><strong>Cabecera 1</strong></td>
+                <td class="ql-table-cell"><strong>Cabecera 2</strong></td>
+                <td class="ql-table-cell"><strong>Cabecera 3</strong></td>
+              </tr>
+              <tr>
+                <td class="ql-table-cell"><br></td>
+                <td class="ql-table-cell"><br></td>
+                <td class="ql-table-cell"><br></td>
+              </tr>
+              <tr>
+                <td class="ql-table-cell"><br></td>
+                <td class="ql-table-cell"><br></td>
+                <td class="ql-table-cell"><br></td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+        quill.clipboard.dangerouslyPasteHTML(lineIndex, tableHtml);
       } else if (option.action === 'clean') {
         quill.removeFormat(lineIndex, line.length() - cursorOffset);
       }
