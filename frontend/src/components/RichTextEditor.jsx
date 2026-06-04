@@ -1,58 +1,23 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.bubble.css';
+import Quill from 'quill';
+import 'quill/dist/quill.bubble.css';
 
-// Register details/summary and table custom blots in Quill
-const Quill = ReactQuill.Quill;
-if (Quill) {
-  const Block = Quill.import('blots/block');
-  const Container = Quill.import('blots/container');
+const Block = Quill.import('blots/block');
+const Container = Quill.import('blots/container');
 
-  class SummaryBlot extends Block {
-    static blotName = 'summary';
-    static tagName = 'summary';
-  }
-  Quill.register(SummaryBlot);
-
-  class DetailsBlot extends Container {
-    static blotName = 'details';
-    static tagName = 'details';
-  }
-  DetailsBlot.defaultChild = 'block';
-  DetailsBlot.allowedChildren = [SummaryBlot, Block];
-  Quill.register(DetailsBlot);
-
-  // Table Custom Blots for Quill 1.x
-  class TableCellBlot extends Block {
-    static blotName = 'table-cell';
-    static tagName = 'td';
-  }
-  Quill.register(TableCellBlot);
-
-  class TableRowBlot extends Container {
-    static blotName = 'table-row';
-    static tagName = 'tr';
-  }
-  TableRowBlot.defaultChild = 'table-cell';
-  TableRowBlot.allowedChildren = [TableCellBlot];
-  Quill.register(TableRowBlot);
-
-  class TableBodyBlot extends Container {
-    static blotName = 'table-body';
-    static tagName = 'tbody';
-  }
-  TableBodyBlot.defaultChild = 'table-row';
-  TableBodyBlot.allowedChildren = [TableRowBlot];
-  Quill.register(TableBodyBlot);
-
-  class TableContainerBlot extends Container {
-    static blotName = 'table';
-    static tagName = 'table';
-  }
-  TableContainerBlot.defaultChild = 'table-body';
-  TableContainerBlot.allowedChildren = [TableBodyBlot];
-  Quill.register(TableContainerBlot);
+class SummaryBlot extends Block {
+  static blotName = 'summary';
+  static tagName = 'summary';
 }
+Quill.register(SummaryBlot);
+
+class DetailsBlot extends Container {
+  static blotName = 'details';
+  static tagName = 'details';
+}
+DetailsBlot.defaultChild = 'block';
+DetailsBlot.allowedChildren = [SummaryBlot, Block];
+Quill.register(DetailsBlot);
 
 const slashCommands = [
   { key: 'h1', label: 'Título Grande', desc: 'Encabezado H1', format: 'header', value: 1, type: 'format' },
@@ -86,12 +51,109 @@ const emojiList = [
 ];
 
 export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCreateSubtask }) {
+  const containerRef = useRef(null);
   const quillRef = useRef(null);
   
+  const [hoveredTable, setHoveredTable] = useState(null);
+  const [hoveredCell, setHoveredCell] = useState(null);
+  const [colButtonPos, setColButtonPos] = useState({ top: 0, left: 0, visible: false });
+  const [rowButtonPos, setRowButtonPos] = useState({ top: 0, left: 0, visible: false });
+  const tableHoverTimeoutRef = useRef(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Refs for callbacks to prevent re-binding event listeners
+  const onChangeRef = useRef(onChange);
+  const onCreateSubtaskRef = useRef(onCreateSubtask);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onCreateSubtaskRef.current = onCreateSubtask;
+  }, [onCreateSubtask]);
+
+  const selectCell = (tdElement) => {
+    if (!tdElement) return;
+    const quill = quillRef.current;
+    if (!quill) return;
+
+    try {
+      const blot = Quill.find(tdElement);
+      if (blot) {
+        const index = blot.offset(quill.scroll);
+        quill.setSelection(index, 0, 'user');
+        quill.focus();
+      } else {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(tdElement);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        quill.focus();
+      }
+    } catch (e) {
+      console.error('Failed to select cell:', e);
+    }
+  };
+
+  const addColumnAtHover = (tdElement) => {
+    if (!tdElement) return;
+    const quill = quillRef.current;
+    if (!quill) return;
+    const tableModule = quill.getModule('table');
+    if (!tableModule) return;
+
+    selectCell(tdElement);
+
+    try {
+      tableModule.insertColumnRight();
+    } catch (err) {
+      console.error('Failed to append col:', err);
+    }
+
+    setColButtonPos(prev => ({ ...prev, visible: false }));
+    setRowButtonPos(prev => ({ ...prev, visible: false }));
+  };
+
+  const addRowAtHover = (tdElement) => {
+    if (!tdElement) return;
+    const quill = quillRef.current;
+    if (!quill) return;
+    const tableModule = quill.getModule('table');
+    if (!tableModule) return;
+
+    selectCell(tdElement);
+
+    try {
+      tableModule.insertRowBelow();
+    } catch (err) {
+      console.error('Failed to append row:', err);
+    }
+
+    setColButtonPos(prev => ({ ...prev, visible: false }));
+    setRowButtonPos(prev => ({ ...prev, visible: false }));
+  };
+
+  const handleButtonMouseEnter = () => {
+    if (tableHoverTimeoutRef.current) {
+      clearTimeout(tableHoverTimeoutRef.current);
+      tableHoverTimeoutRef.current = null;
+    }
+  };
+
+  const handleButtonMouseLeave = () => {
+    tableHoverTimeoutRef.current = setTimeout(() => {
+      setColButtonPos(prev => ({ ...prev, visible: false }));
+      setRowButtonPos(prev => ({ ...prev, visible: false }));
+      setHoveredCell(null);
+      setHoveredTable(null);
+    }, 300);
+  };
 
   const imageHandler = () => {
     const input = document.createElement('input');
@@ -112,9 +174,11 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           });
           const data = await res.json();
           if (data.url) {
-            const quill = quillRef.current.getEditor();
-            const range = quill.getSelection(true);
-            quill.insertEmbed(range.index, 'image', data.url);
+            const quill = quillRef.current;
+            if (quill) {
+              const range = quill.getSelection(true);
+              quill.insertEmbed(range.index, 'image', data.url);
+            }
           }
         } catch (err) {
           console.error('Image upload failed', err);
@@ -135,7 +199,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       handlers: {
         image: imageHandler
       }
-    }
+    },
+    table: true
   }), []);
 
   const filteredOptions = useMemo(() => {
@@ -179,273 +244,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     };
   }, []);
 
-  // Native contextmenu listener on quill.root
-  useEffect(() => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-
-    const handleNativeContextMenu = (e) => {
-      const wrapper = quill.root.closest('.rich-text-editor-container');
-      if (!wrapper) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const container = wrapper.getBoundingClientRect();
-      let x = e.clientX - container.left;
-      let y = e.clientY - container.top;
-
-      const menuWidth = 190;
-      const menuHeight = 220; // approximate height
-
-      if (x + menuWidth > container.width) {
-        x = container.width - menuWidth - 8;
-      }
-      if (y + menuHeight > container.height) {
-        y = container.height - menuHeight - 8;
-      }
-      if (x < 0) x = 8;
-      if (y < 0) y = 8;
-
-      setContextMenuPosition({ x, y });
-      setShowContextMenu(true);
-    };
-
-    quill.root.addEventListener('contextmenu', handleNativeContextMenu);
-    return () => {
-      quill.root.removeEventListener('contextmenu', handleNativeContextMenu);
-    };
-  }, [quillRef.current]);
-
-
-  const toggleFormat = (formatName) => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const currentFormats = quill.getFormat();
-    const isFormatActive = currentFormats[formatName];
-    quill.format(formatName, !isFormatActive);
-  };
-
-  const toggleCodeBlock = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const currentFormats = quill.getFormat();
-    quill.format('code-block', !currentFormats['code-block']);
-  };
-
-  const toggleBlockquote = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const currentFormats = quill.getFormat();
-    quill.format('blockquote', !currentFormats['blockquote']);
-  };
-
-  const insertCollapsible = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      quill.clipboard.dangerouslyPasteHTML(range.index, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido...</p></details>');
-    }
-  };
-
-  const insertDivider = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      quill.insertText(range.index, '────────────────────────────────────────\n');
-    }
-  };
-
-  const insertTable = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      const tableHtml = `
-        <table class="ql-table">
-          <tbody>
-            <tr>
-              <td class="ql-table-cell"><strong>Cabecera 1</strong></td>
-              <td class="ql-table-cell"><strong>Cabecera 2</strong></td>
-              <td class="ql-table-cell"><strong>Cabecera 3</strong></td>
-            </tr>
-            <tr>
-              <td class="ql-table-cell"><br></td>
-              <td class="ql-table-cell"><br></td>
-              <td class="ql-table-cell"><br></td>
-            </tr>
-            <tr>
-              <td class="ql-table-cell"><br></td>
-              <td class="ql-table-cell"><br></td>
-              <td class="ql-table-cell"><br></td>
-            </tr>
-          </tbody>
-        </table>
-      `;
-      quill.clipboard.dangerouslyPasteHTML(range.index, tableHtml);
-    }
-    setShowContextMenu(false);
-  };
-
-  const getIsCursorInTable = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return false;
-    
-    // Check DOM path
-    try {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        let node = selection.getRangeAt(0).startContainer;
-        while (node && node !== quill.root) {
-          if (node.nodeName === 'TD' || node.nodeName === 'TH' || node.nodeName === 'TABLE') {
-            return true;
-          }
-          node = node.parentNode;
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return false;
-  };
-
-  const handleTableAction = (action) => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    let node = selection.getRangeAt(0).startContainer;
-    const td = node.nodeType === Node.ELEMENT_NODE ? node.closest('td') : node.parentElement?.closest('td');
-    if (!td) return;
-
-    const tr = td.closest('tr');
-    const table = td.closest('table');
-    if (!tr || !table) return;
-
-    const cellIndex = td.cellIndex;
-
-    if (action === 'insertRowAbove' || action === 'insertRowBelow') {
-      const newTr = document.createElement('tr');
-      const numCols = tr.cells.length;
-      for (let i = 0; i < numCols; i++) {
-        const newTd = document.createElement('td');
-        newTd.className = 'ql-table-cell';
-        newTd.innerHTML = '<br>';
-        newTr.appendChild(newTd);
-      }
-      if (action === 'insertRowAbove') {
-        table.tBodies[0].insertBefore(newTr, tr);
-      } else {
-        table.tBodies[0].insertBefore(newTr, tr.nextSibling);
-      }
-    } else if (action === 'insertColumnLeft' || action === 'insertColumnRight') {
-      const rows = Array.from(table.querySelectorAll('tr'));
-      rows.forEach(r => {
-        const newTd = document.createElement('td');
-        newTd.className = 'ql-table-cell';
-        newTd.innerHTML = '<br>';
-        const targetCell = r.cells[cellIndex];
-        if (action === 'insertColumnLeft') {
-          r.insertBefore(newTd, targetCell);
-        } else {
-          r.insertBefore(newTd, targetCell ? targetCell.nextSibling : null);
-        }
-      });
-    } else if (action === 'deleteRow') {
-      if (table.querySelectorAll('tr').length <= 1) {
-        table.remove();
-      } else {
-        tr.remove();
-      }
-    } else if (action === 'deleteColumn') {
-      const rows = Array.from(table.querySelectorAll('tr'));
-      const numCols = tr.cells.length;
-      if (numCols <= 1) {
-        table.remove();
-      } else {
-        rows.forEach(r => {
-          const targetCell = r.cells[cellIndex];
-          if (targetCell) targetCell.remove();
-        });
-      }
-    } else if (action === 'deleteTable') {
-      table.remove();
-    }
-
-    const newHtml = quill.root.innerHTML;
-    quill.setContents(quill.clipboard.convert(newHtml));
-    
-    if (onChange) {
-      onChange(newHtml);
-    }
-
-    setShowContextMenu(false);
-  };
-
-  const triggerMention = (char) => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      quill.insertText(range.index, char);
-      quill.setSelection(range.index + 1);
-      quill.focus();
-    }
-  };
-
-  const copySelectionAsMarkdown = async () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection();
-    if (!range || range.length === 0) return;
-
-    const nativeSelection = window.getSelection();
-    if (nativeSelection && nativeSelection.rangeCount > 0) {
-      const nativeRange = nativeSelection.getRangeAt(0);
-      const container = document.createElement('div');
-      container.appendChild(nativeRange.cloneContents());
-      const html = container.innerHTML;
-      const markdown = htmlToMarkdown(html);
-      
-      try {
-        await navigator.clipboard.writeText(markdown);
-      } catch (err) {
-        console.error('Failed to copy to clipboard', err);
-      }
-    }
-  };
-
-  const pasteMarkdownFromClipboard = async () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        const html = markdownToHtml(text);
-        const range = quill.getSelection(true);
-        if (range) {
-          quill.clipboard.dangerouslyPasteHTML(range.index, html);
-          quill.focus();
-        }
-      }
-    } catch (err) {
-      console.error('Failed to read clipboard', err);
-    }
-  };
-
-  const cleanFormatting = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection();
-    if (range) {
-      quill.removeFormat(range.index, range.length);
-    }
-  };
-
-  // Synchronize index range boundary when options filter changes
+  // Sync index boundary when options filter changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [filteredOptions]);
@@ -476,11 +275,284 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     setEmojiSelectedIndex(0);
   }, [filteredEmojis]);
 
-  // Selection change listener for slash detection
-  useEffect(() => {
-    const quill = quillRef.current?.getEditor();
+  const toggleFormat = (formatName) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const currentFormats = quill.getFormat();
+    const isFormatActive = currentFormats[formatName];
+    quill.format(formatName, !isFormatActive);
+  };
+
+  const toggleCodeBlock = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const currentFormats = quill.getFormat();
+    quill.format('code-block', !currentFormats['code-block']);
+  };
+
+  const toggleBlockquote = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const currentFormats = quill.getFormat();
+    quill.format('blockquote', !currentFormats['blockquote']);
+  };
+
+  const insertCollapsible = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection(true);
+    if (range) {
+      quill.clipboard.dangerouslyPasteHTML(range.index, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido...</p></details>');
+    }
+  };
+
+  const insertDivider = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection(true);
+    if (range) {
+      quill.insertText(range.index, '────────────────────────────────────────\n');
+    }
+  };
+
+  const insertTable = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const tableModule = quill.getModule('table');
+    if (tableModule) {
+      tableModule.insertTable(3, 3);
+    }
+    setShowContextMenu(false);
+  };
+
+  const getIsCursorInTable = () => {
+    const quill = quillRef.current;
+    if (!quill) return false;
+    
+    try {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        let node = selection.getRangeAt(0).startContainer;
+        while (node && node !== quill.root) {
+          if (node.nodeName === 'TD' || node.nodeName === 'TH' || node.nodeName === 'TABLE') {
+            return true;
+          }
+          node = node.parentNode;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
+
+  const handleTableAction = (action) => {
+    const quill = quillRef.current;
     if (!quill) return;
 
+    const tableModule = quill.getModule('table');
+    if (!tableModule) return;
+
+    if (action === 'insertRowAbove') {
+      tableModule.insertRowAbove();
+    } else if (action === 'insertRowBelow') {
+      tableModule.insertRowBelow();
+    } else if (action === 'insertColumnLeft') {
+      tableModule.insertColumnLeft();
+    } else if (action === 'insertColumnRight') {
+      tableModule.insertColumnRight();
+    } else if (action === 'deleteRow') {
+      tableModule.deleteRow();
+    } else if (action === 'deleteColumn') {
+      tableModule.deleteColumn();
+    } else if (action === 'deleteTable') {
+      tableModule.deleteTable();
+    }
+
+    setShowContextMenu(false);
+  };
+
+  const triggerMention = (char) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection(true);
+    if (range) {
+      quill.insertText(range.index, char);
+      quill.setSelection(range.index + 1);
+      quill.focus();
+    }
+  };
+
+  const copySelectionAsMarkdown = async () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection();
+    if (!range || range.length === 0) return;
+
+    const nativeSelection = window.getSelection();
+    if (nativeSelection && nativeSelection.rangeCount > 0) {
+      const nativeRange = nativeSelection.getRangeAt(0);
+      const container = document.createElement('div');
+      container.appendChild(nativeRange.cloneContents());
+      const html = container.innerHTML;
+      const markdown = htmlToMarkdown(html);
+      
+      try {
+        await navigator.clipboard.writeText(markdown);
+      } catch (err) {
+        console.error('Failed to copy to clipboard', err);
+      }
+    }
+  };
+
+  const pasteMarkdownFromClipboard = async () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        const html = markdownToHtml(text);
+        const range = quill.getSelection(true);
+        if (range) {
+          quill.clipboard.dangerouslyPasteHTML(range.index, html);
+          quill.focus();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to read clipboard', err);
+    }
+  };
+
+  const cleanFormatting = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection();
+    if (range) {
+      quill.removeFormat(range.index, range.length);
+    }
+  };
+
+  // Main useEffect: Initializing Quill and binding all event listeners once
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const editorDiv = document.createElement('div');
+    containerRef.current.appendChild(editorDiv);
+
+    const quill = new Quill(editorDiv, {
+      theme: 'bubble',
+      placeholder: placeholder || 'Escribe aquí...',
+      modules: modules,
+      bounds: '.task-detail-content'
+    });
+
+    quillRef.current = quill;
+
+    if (value) {
+      quill.clipboard.dangerouslyPasteHTML(value);
+    }
+
+    // 1. Handle text change callback to parent component
+    const handleTextChangeCallback = () => {
+      if (onChangeRef.current) {
+        onChangeRef.current(quill.root.innerHTML);
+      }
+    };
+    quill.on('text-change', handleTextChangeCallback);
+
+    // 2. Event listeners for Table Add Hover Buttons
+    const handleMouseMove = (e) => {
+      const cell = e.target.closest('td, th');
+      const table = e.target.closest('table');
+      const wrapper = quill.root.closest('.rich-text-editor-container');
+      
+      if (cell && table && wrapper) {
+        if (tableHoverTimeoutRef.current) {
+          clearTimeout(tableHoverTimeoutRef.current);
+          tableHoverTimeoutRef.current = null;
+        }
+
+        setHoveredTable(table);
+        setHoveredCell(cell);
+
+        const tableRect = table.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+
+        const tableLeft = tableRect.left - wrapperRect.left + wrapper.scrollLeft;
+        const tableTop = tableRect.top - wrapperRect.top + wrapper.scrollTop;
+
+        setColButtonPos({
+          left: tableLeft + tableRect.width + 4,
+          top: tableTop + (tableRect.height / 2) - 12,
+          visible: true
+        });
+
+        setRowButtonPos({
+          left: tableLeft + (tableRect.width / 2) - 12,
+          top: tableTop + tableRect.height + 4,
+          visible: true
+        });
+      } else {
+        if (!tableHoverTimeoutRef.current) {
+          tableHoverTimeoutRef.current = setTimeout(() => {
+            setColButtonPos(prev => ({ ...prev, visible: false }));
+            setRowButtonPos(prev => ({ ...prev, visible: false }));
+            setHoveredCell(null);
+            setHoveredTable(null);
+          }, 300);
+        }
+      }
+    };
+
+    const handleMouseLeave = () => {
+      if (!tableHoverTimeoutRef.current) {
+        tableHoverTimeoutRef.current = setTimeout(() => {
+          setColButtonPos(prev => ({ ...prev, visible: false }));
+          setRowButtonPos(prev => ({ ...prev, visible: false }));
+          setHoveredCell(null);
+          setHoveredTable(null);
+        }, 300);
+      }
+    };
+
+    quill.root.addEventListener('mousemove', handleMouseMove);
+    quill.root.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('scroll', handleMouseLeave, true);
+
+    // 3. Custom Right-Click Context Menu Listener
+    const handleNativeContextMenu = (e) => {
+      const wrapper = quill.root.closest('.rich-text-editor-container');
+      if (!wrapper) return;
+
+      if (getIsCursorInTable()) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const container = wrapper.getBoundingClientRect();
+      let x = e.clientX - container.left;
+      let y = e.clientY - container.top;
+
+      const menuWidth = 190;
+      const menuHeight = 220;
+
+      if (x + menuWidth > container.width) {
+        x = container.width - menuWidth - 8;
+      }
+      if (y + menuHeight > container.height) {
+        y = container.height - menuHeight - 8;
+      }
+      if (x < 0) x = 8;
+      if (y < 0) y = 8;
+
+      setContextMenuPosition({ x, y });
+      setShowContextMenu(true);
+    };
+    quill.root.addEventListener('contextmenu', handleNativeContextMenu);
+
+    // 4. Slash (/), Hash (#), and Emoji (:) Menu Selection Change Trigger
     const checkSlashCommand = () => {
       const range = quill.getSelection();
       if (!range) {
@@ -497,7 +569,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       const cursorOffset = range.index - lineIndex;
       const lineLength = line.length();
       
-      // Get text before cursor on current line
       const lineText = quill.getText(lineIndex, lineLength - 1);
       const textBeforeCursor = lineText.slice(0, cursorOffset);
 
@@ -506,7 +577,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         setSlashQuery(query);
         const bounds = quill.getBounds(range.index);
         
-        // Offset below the current line
         setMenuPosition({
           top: bounds.top + bounds.height + 4,
           left: bounds.left
@@ -519,7 +589,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         setShowSlashMenu(false);
       }
 
-      // Check for Hash menu (#)
       const hashIndex = textBeforeCursor.lastIndexOf('#');
       if (hashIndex !== -1) {
         const charBeforeHash = hashIndex > 0 ? textBeforeCursor[hashIndex - 1] : ' ';
@@ -540,7 +609,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
       setShowHashMenu(false);
 
-      // Check for Emoji menu (:)
       const colonIndex = textBeforeCursor.lastIndexOf(':');
       if (colonIndex !== -1) {
         const charBeforeColon = colonIndex > 0 ? textBeforeCursor[colonIndex - 1] : ' ';
@@ -560,23 +628,11 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
       setShowEmojiMenu(false);
     };
-
     quill.on('selection-change', checkSlashCommand);
-    // Listen to text-change to update query dynamically as user types
     quill.on('text-change', checkSlashCommand);
 
-    return () => {
-      quill.off('selection-change', checkSlashCommand);
-      quill.off('text-change', checkSlashCommand);
-    };
-  }, [quillRef.current]);
-
-  // Real-time Markdown auto-conversion listener
-  useEffect(() => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-
-    const handleTextChange = (delta, oldDelta, source) => {
+    // 5. User Input Real-time Markdown Auto-conversion
+    const handleTextChangeMarkdown = (delta, oldDelta, source) => {
       if (source !== 'user') return;
 
       const range = quill.getSelection();
@@ -619,18 +675,9 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         }
       }
     };
+    quill.on('text-change', handleTextChangeMarkdown);
 
-    quill.on('text-change', handleTextChange);
-    return () => {
-      quill.off('text-change', handleTextChange);
-    };
-  }, [quillRef.current]);
-
-  // Clipboard copy/paste handler for Markdown
-  useEffect(() => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-
+    // 6. Paste/Copy handling for Markdown conversions
     const handlePaste = (e) => {
       const clipboardData = e.clipboardData || window.clipboardData;
       const pastedText = clipboardData.getData('text/plain');
@@ -673,35 +720,23 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         e.clipboardData.setData('text/html', html);
       }
     };
-
     quill.root.addEventListener('paste', handlePaste, true);
     quill.root.addEventListener('copy', handleCopy);
 
-    return () => {
-      quill.root.removeEventListener('paste', handlePaste, true);
-      quill.root.removeEventListener('copy', handleCopy);
-    };
-  }, [quillRef.current]);
-
-  // Selection change listener for Convert to Subtask popup
-  useEffect(() => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-
-    const handleSelectionChange = (range, oldRange, source) => {
+    // 7. Selection tracking for the Convert to Subtask popup
+    const handleSelectionChangeSubtask = (range) => {
       if (!range || range.length === 0) {
         setShowSelectionMenu(false);
         return;
       }
 
       const text = quill.getText(range.index, range.length).trim();
-      if (text.length > 0 && onCreateSubtask) {
+      if (text.length > 0 && onCreateSubtaskRef.current) {
         const bounds = quill.getBounds(range.index, range.length);
         
-        // Calculate centered top position
         setSelectionMenuPosition({
           top: bounds.top - 40,
-          left: bounds.left + (bounds.width / 2) - 60 // 60px is approx half button width
+          left: bounds.left + (bounds.width / 2) - 60
         });
         setSelectedText(text);
         setShowSelectionMenu(true);
@@ -709,33 +744,49 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         setShowSelectionMenu(false);
       }
     };
+    quill.on('selection-change', handleSelectionChangeSubtask);
 
-    quill.on('selection-change', handleSelectionChange);
     return () => {
-      quill.off('selection-change', handleSelectionChange);
+      quill.off('text-change', handleTextChangeCallback);
+      quill.off('selection-change', checkSlashCommand);
+      quill.off('text-change', checkSlashCommand);
+      quill.off('text-change', handleTextChangeMarkdown);
+      quill.off('selection-change', handleSelectionChangeSubtask);
+      
+      if (quill.root) {
+        quill.root.removeEventListener('mousemove', handleMouseMove);
+        quill.root.removeEventListener('mouseleave', handleMouseLeave);
+        quill.root.removeEventListener('contextmenu', handleNativeContextMenu);
+        quill.root.removeEventListener('paste', handlePaste, true);
+        quill.root.removeEventListener('copy', handleCopy);
+      }
+      window.removeEventListener('scroll', handleMouseLeave, true);
+      
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+      quillRef.current = null;
+      if (tableHoverTimeoutRef.current) clearTimeout(tableHoverTimeoutRef.current);
     };
-  }, [quillRef.current, onCreateSubtask]);
+  }, []);
 
-  const convertSelectionToSubtask = () => {
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-
-    const range = quill.getSelection();
-    if (!range) return;
-
-    // Delete selected text
-    quill.deleteText(range.index, range.length);
-    
-    // Call parent handler
-    if (onCreateSubtask) {
-      onCreateSubtask(selectedText);
+  // Update value prop changes from outside cleanly
+  useEffect(() => {
+    const quill = quillRef.current;
+    if (quill) {
+      const currentHtml = quill.root.innerHTML;
+      if (value !== undefined && value !== currentHtml) {
+        const selection = quill.getSelection();
+        quill.clipboard.dangerouslyPasteHTML(value || '');
+        if (selection) {
+          quill.setSelection(selection.index, selection.length);
+        }
+      }
     }
-
-    setShowSelectionMenu(false);
-  };
+  }, [value]);
 
   const selectHashOption = (taskItem) => {
-    const quill = quillRef.current?.getEditor();
+    const quill = quillRef.current;
     if (!quill) return;
 
     const range = quill.getSelection();
@@ -754,14 +805,11 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       const deleteIndex = lineIndex + hashIndex;
       const deleteLength = cursorOffset - hashIndex;
 
-      // Delete the "#query"
       quill.deleteText(deleteIndex, deleteLength);
 
-      // Insert link
       const linkText = `#${taskItem.id}: ${taskItem.title}`;
       quill.insertText(deleteIndex, linkText, 'link', `/tasks/${taskItem.id}`);
       
-      // Trailing space
       quill.insertText(deleteIndex + linkText.length, ' ');
       quill.setSelection(deleteIndex + linkText.length + 1);
     }
@@ -772,7 +820,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const selectEmojiOption = (emojiItem) => {
-    const quill = quillRef.current?.getEditor();
+    const quill = quillRef.current;
     if (!quill) return;
 
     const range = quill.getSelection();
@@ -791,10 +839,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       const deleteIndex = lineIndex + colonIndex;
       const deleteLength = cursorOffset - colonIndex;
 
-      // Delete the ":query"
       quill.deleteText(deleteIndex, deleteLength);
 
-      // Insert emoji
       quill.insertText(deleteIndex, emojiItem.char);
       quill.setSelection(deleteIndex + emojiItem.char.length);
     }
@@ -805,7 +851,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const selectOption = (option) => {
-    const quill = quillRef.current?.getEditor();
+    const quill = quillRef.current;
     if (!quill) return;
 
     const range = quill.getSelection();
@@ -816,10 +862,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     const lineIndex = quill.getIndex(line);
     const cursorOffset = range.index - lineIndex;
 
-    // Delete the command (e.g. "/h1" or "/")
     quill.deleteText(lineIndex, cursorOffset);
 
-    // Apply format
     if (option.type === 'format') {
       quill.formatLine(lineIndex, 1, option.format, option.value);
     } else if (option.type === 'action') {
@@ -828,28 +872,10 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       } else if (option.action === 'collapsible') {
         quill.clipboard.dangerouslyPasteHTML(lineIndex, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>');
       } else if (option.action === 'table') {
-        const tableHtml = `
-          <table class="ql-table">
-            <tbody>
-              <tr>
-                <td class="ql-table-cell"><strong>Cabecera 1</strong></td>
-                <td class="ql-table-cell"><strong>Cabecera 2</strong></td>
-                <td class="ql-table-cell"><strong>Cabecera 3</strong></td>
-              </tr>
-              <tr>
-                <td class="ql-table-cell"><br></td>
-                <td class="ql-table-cell"><br></td>
-                <td class="ql-table-cell"><br></td>
-              </tr>
-              <tr>
-                <td class="ql-table-cell"><br></td>
-                <td class="ql-table-cell"><br></td>
-                <td class="ql-table-cell"><br></td>
-              </tr>
-            </tbody>
-          </table>
-        `;
-        quill.clipboard.dangerouslyPasteHTML(lineIndex, tableHtml);
+        const tableModule = quill.getModule('table');
+        if (tableModule) {
+          tableModule.insertTable(3, 3);
+        }
       } else if (option.action === 'clean') {
         quill.removeFormat(lineIndex, line.length() - cursorOffset);
       }
@@ -861,7 +887,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const handleKeyDown = (e) => {
-    // 0. Context Menu close on escape
     if (showContextMenu) {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -871,7 +896,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
     }
 
-    // 1. Slash Menu navigation
     if (showSlashMenu && filteredOptions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -891,7 +915,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       return;
     }
 
-    // 2. Hash Menu navigation
     if (showHashMenu && filteredTasks.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -911,7 +934,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       return;
     }
 
-    // 3. Emoji Menu navigation
     if (showEmojiMenu && filteredEmojis.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -932,27 +954,78 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     }
   };
 
+  const convertSelectionToSubtask = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+
+    const range = quill.getSelection();
+    if (!range) return;
+
+    quill.deleteText(range.index, range.length);
+    
+    if (onCreateSubtaskRef.current) {
+      onCreateSubtaskRef.current(selectedText);
+    }
+
+    setShowSelectionMenu(false);
+  };
+
   return (
     <div 
       className="rich-text-editor-container bubble-theme"
       onKeyDownCapture={handleKeyDown}
       style={{ position: 'relative' }}
     >
-      <ReactQuill 
-        ref={quillRef}
-        theme="bubble" 
-        bounds={".task-detail-content"}
-        value={value} 
-        onChange={onChange} 
-        modules={modules}
-        placeholder={placeholder || 'Escribe aquí...'}
+      <div 
+        ref={containerRef} 
+        className="quill-editor-wrapper"
       />
+
+      <button
+        className={`table-hover-add-btn col-add-btn ${colButtonPos.visible ? 'visible' : ''}`}
+        style={{
+          position: 'absolute',
+          left: colButtonPos.left,
+          top: colButtonPos.top,
+          zIndex: 1000
+        }}
+        onMouseEnter={handleButtonMouseEnter}
+        onMouseLeave={handleButtonMouseLeave}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => addColumnAtHover(hoveredCell)}
+        title="Agregar columna a la derecha"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+
+      <button
+        className={`table-hover-add-btn row-add-btn ${rowButtonPos.visible ? 'visible' : ''}`}
+        style={{
+          position: 'absolute',
+          left: rowButtonPos.left,
+          top: rowButtonPos.top,
+          zIndex: 1000
+        }}
+        onMouseEnter={handleButtonMouseEnter}
+        onMouseLeave={handleButtonMouseLeave}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => addRowAtHover(hoveredCell)}
+        title="Agregar fila abajo"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
 
       {showContextMenu && (
         <div 
           className={`calendar-context-menu editor-context-menu ${
-            quillRef.current?.getEditor() && 
-            contextMenuPosition.x > (quillRef.current.getEditor().container.getBoundingClientRect().width / 2) 
+            quillRef.current && 
+            contextMenuPosition.x > (quillRef.current.container.getBoundingClientRect().width / 2) 
               ? 'align-left' 
               : ''
           }`}
@@ -1047,15 +1120,15 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
             <div className="context-menu-submenu">
               <div 
                 className={`context-menu-item ${
-                  !(quillRef.current?.getEditor()?.getSelection()?.length > 0) ? 'disabled' : ''
+                  !(quillRef.current?.getSelection()?.length > 0) ? 'disabled' : ''
                 }`}
                 onClick={() => {
-                  if (quillRef.current?.getEditor()?.getSelection()?.length > 0) {
+                  if (quillRef.current?.getSelection()?.length > 0) {
                     copySelectionAsMarkdown();
                   }
                 }}
                 style={
-                  !(quillRef.current?.getEditor()?.getSelection()?.length > 0) 
+                  !(quillRef.current?.getSelection()?.length > 0) 
                     ? { opacity: 0.4, cursor: 'not-allowed' } 
                     : {}
                 }
