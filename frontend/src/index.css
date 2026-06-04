@@ -2428,7 +2428,8 @@ input:checked + .slider:before {
 }
 
 /* Table Styles inside Rich Text Editor */
-.ql-container .ql-editor table {
+.ql-container .ql-editor table,
+.ql-editor table {
   border-collapse: collapse;
   width: 100%;
   margin: 1rem 0;
@@ -2440,26 +2441,32 @@ input:checked + .slider:before {
 }
 
 .ql-container .ql-editor th,
-.ql-container .ql-editor td {
+.ql-container .ql-editor td,
+.ql-editor th,
+.ql-editor td {
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 8px 12px;
   color: var(--text-secondary);
   min-width: 50px;
 }
 
-.ql-container .ql-editor th {
+.ql-container .ql-editor th,
+.ql-editor th {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
   font-weight: 600;
   text-align: left;
 }
 
-.ql-container .ql-editor tr:hover {
+.ql-container .ql-editor tr:hover,
+.ql-editor tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
 
 .ql-container .ql-editor td.selected,
-.ql-container .ql-editor th.selected {
+.ql-container .ql-editor th.selected,
+.ql-editor td.selected,
+.ql-editor th.selected {
   background: rgba(var(--accent-rgb), 0.15);
   border: 1px solid var(--accent-hover);
 }

@@ -280,7 +280,8 @@ export function GTDView({ tasks, lists, onRefreshTasks, onRefreshLists }) {
                     <h4 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>{currentInboxTask.title}</h4>
                     {currentInboxTask.description && currentInboxTask.description !== '<p><br></p>' && (
                       <div 
-                        style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}
+                        className="ql-editor"
+                        style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px', padding: 0 }}
                         dangerouslySetInnerHTML={{ __html: currentInboxTask.description }}
                       />
                     )}

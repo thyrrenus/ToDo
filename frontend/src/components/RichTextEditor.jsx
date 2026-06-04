@@ -2,7 +2,7 @@ import { useRef, useMemo, useState, useEffect } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.bubble.css';
 
-// Register details/summary custom blots in Quill
+// Register details/summary and table custom blots in Quill
 const Quill = ReactQuill.Quill;
 if (Quill) {
   const Block = Quill.import('blots/block');
@@ -21,6 +21,37 @@ if (Quill) {
   DetailsBlot.defaultChild = 'block';
   DetailsBlot.allowedChildren = [SummaryBlot, Block];
   Quill.register(DetailsBlot);
+
+  // Table Custom Blots for Quill 1.x
+  class TableCellBlot extends Block {
+    static blotName = 'table-cell';
+    static tagName = 'td';
+  }
+  Quill.register(TableCellBlot);
+
+  class TableRowBlot extends Container {
+    static blotName = 'table-row';
+    static tagName = 'tr';
+  }
+  TableRowBlot.defaultChild = 'table-cell';
+  TableRowBlot.allowedChildren = [TableCellBlot];
+  Quill.register(TableRowBlot);
+
+  class TableBodyBlot extends Container {
+    static blotName = 'table-body';
+    static tagName = 'tbody';
+  }
+  TableBodyBlot.defaultChild = 'table-row';
+  TableBodyBlot.allowedChildren = [TableRowBlot];
+  Quill.register(TableBodyBlot);
+
+  class TableContainerBlot extends Container {
+    static blotName = 'table';
+    static tagName = 'table';
+  }
+  TableContainerBlot.defaultChild = 'table-body';
+  TableContainerBlot.allowedChildren = [TableBodyBlot];
+  Quill.register(TableContainerBlot);
 }
 
 const slashCommands = [
