@@ -230,6 +230,19 @@ body {
   background-color: rgba(255, 255, 255, 0.03);
 }
 
+.task-item-subtask-row .subtask-delete-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s, color 0.2s;
+}
+
+.task-item-subtask-row:hover .subtask-delete-btn {
+  opacity: 0.6;
+}
+
+.task-item-subtask-row:hover .subtask-delete-btn:hover {
+  opacity: 1;
+}
+
 .task-item-subtask-row.selected {
   background-color: rgba(255, 255, 255, 0.06);
 }

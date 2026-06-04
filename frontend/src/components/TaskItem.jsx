@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu }) {
@@ -42,6 +42,18 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_completed: !currentStatus ? 1 : 0 })
+      });
+      if (res.ok && onSubtaskAdded) onSubtaskAdded();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteSubtask = async (e, subtaskId) => {
+    if (e) e.stopPropagation();
+    try {
+      const res = await fetch(`/api/subtasks/${subtaskId}`, {
+        method: 'DELETE'
       });
       if (res.ok && onSubtaskAdded) onSubtaskAdded();
     } catch (err) {
@@ -197,6 +209,18 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
                   </span>
                 )}
                 {isSubtaskSelected && <AlignLeft size={12} className="subtask-details-icon" style={{ marginLeft: st.due_date ? '0' : 'auto' }} />}
+                
+                <button 
+                  className="icon-btn danger subtask-delete-btn" 
+                  onClick={(e) => handleDeleteSubtask(e, st.id)}
+                  title="Eliminar subtarea"
+                  style={{
+                    marginLeft: (st.due_date || isSubtaskSelected) ? '4px' : 'auto',
+                    padding: '2px',
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
             );
           })}
