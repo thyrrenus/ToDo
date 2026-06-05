@@ -25,7 +25,7 @@ const ProjectKanbanView = lazy(() => import('./components/ProjectKanbanView').th
 const AddTaskWidget = lazy(() => import('./components/AddTaskWidget').then(m => ({ default: m.AddTaskWidget })));
 const CompletedView = lazy(() => import('./components/CompletedView').then(m => ({ default: m.CompletedView })));
 
-import { Inbox, Plus, Mic, X, Wifi, WifiOff } from 'lucide-react';
+import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { useTodo } from './context/TodoContext';
 import { parseTimezoneOffset } from './utils/timezone';
@@ -741,25 +741,35 @@ function App() {
                   type="button"
                   onClick={() => setFilterHideCompleted(prev => !prev)}
                   style={{
-                    background: !filterHideCompleted ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    background: !filterHideCompleted ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.02)',
                     border: !filterHideCompleted ? '1.5px solid var(--accent-hover, #7c3aed)' : '1.5px solid rgba(255, 255, 255, 0.05)',
-                    borderRadius: '20px',
-                    color: !filterHideCompleted ? '#ffffff' : 'var(--text-secondary)',
-                    padding: '5px 12px',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    color: !filterHideCompleted ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: !filterHideCompleted ? '0 0 10px rgba(59, 130, 246, 0.25)' : 'none',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: !filterHideCompleted ? '0 0 10px rgba(124, 58, 237, 0.25)' : 'none',
                     transition: 'all 0.2s ease',
                     flexShrink: 0
                   }}
-                  onMouseEnter={e => { if (filterHideCompleted) e.currentTarget.style.borderColor = 'var(--accent-hover, #7c3aed)'; }}
-                  onMouseLeave={e => { if (filterHideCompleted) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                  title={filterHideCompleted ? 'Mostrar tareas completadas' : 'Ocultar tareas completadas'}
+                  onMouseEnter={e => { 
+                    if (filterHideCompleted) {
+                      e.currentTarget.style.borderColor = 'var(--accent-hover, #7c3aed)';
+                      e.currentTarget.style.color = '#ffffff';
+                    }
+                  }}
+                  onMouseLeave={e => { 
+                    if (filterHideCompleted) {
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }
+                  }}
                 >
-                  👁️ {filterHideCompleted ? 'Mostrar Completadas' : 'Completadas Visibles'}
+                  {filterHideCompleted ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
 
                 {/* Vertical Divider */}
