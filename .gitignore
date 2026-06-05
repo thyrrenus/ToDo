@@ -50,3 +50,5 @@ backend/uploads/
 frontend/public/models/
 **/models/
 
+# Gemini Agentic Skills and IDE settings
+.gemini/
