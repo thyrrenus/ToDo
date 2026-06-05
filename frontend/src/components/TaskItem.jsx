@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu, isSyncing }) {
+export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu, isSyncing }) {
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -260,4 +260,9 @@ export function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggl
       )}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  return prevProps.task === nextProps.task &&
+         prevProps.isSelected === nextProps.isSelected &&
+         prevProps.selectedSubtaskId === nextProps.selectedSubtaskId &&
+         prevProps.isSyncing === nextProps.isSyncing;
+});
