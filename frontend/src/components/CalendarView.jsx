@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { startOfWeek, addDays, format, isSameDay, parseISO, getHours, getMinutes, differenceInMinutes, startOfToday } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { adjustExternalDate } from '../utils/timezone';
 
 export function CalendarView({ 
@@ -456,15 +457,15 @@ export function CalendarView({
   return (
     <div className="calendar-view" style={{ position: 'relative' }}>
       <div className="calendar-header">
-        <h2>{format(currentDate, 'MMMM yyyy')}</h2>
+        <h2>{(() => { const f = format(currentDate, 'MMMM yyyy', { locale: es }); return f.charAt(0).toUpperCase() + f.slice(1); })()}</h2>
         <div className="calendar-controls">
           <button onClick={() => setCurrentDate(addDays(currentDate, viewMode === 'week' ? -7 : -1))}>&lt;</button>
-          <button onClick={() => setCurrentDate(startOfToday())}>Today</button>
+          <button onClick={() => setCurrentDate(startOfToday())}>Hoy</button>
           <button onClick={() => setCurrentDate(addDays(currentDate, viewMode === 'week' ? 7 : 1))}>&gt;</button>
           
           <select value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
-            <option value="day">Day</option>
-            <option value="week">Week</option>
+            <option value="day" style={{ background: '#1c1c1c' }}>Día</option>
+            <option value="week" style={{ background: '#1c1c1c' }}>Semana</option>
           </select>
         </div>
       </div>
@@ -514,7 +515,7 @@ export function CalendarView({
         <div className="calendar-days-header" style={{ paddingLeft: '60px' }}>
           {days.map(day => (
             <div key={day.toString()} className="calendar-day-label">
-              <div className="day-name">{format(day, 'EEE')}</div>
+              <div className="day-name">{(() => { const name = format(day, 'EEE', { locale: es }); return name.charAt(0).toUpperCase() + name.slice(1); })()}</div>
               <div className={`day-number ${isSameDay(day, startOfToday()) ? 'today' : ''}`}>
                 {format(day, 'd')}
               </div>
@@ -957,7 +958,7 @@ export function CalendarView({
             Nueva Actividad
           </div>
           <div className="quick-create-time-info" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            📅 {format(quickCreate.day, 'EEE d, MMMM')} a las {quickCreate.hour === 0 ? '12:00 AM' : quickCreate.hour < 12 ? `${quickCreate.hour}:00 AM` : quickCreate.hour === 12 ? '12:00 PM' : `${quickCreate.hour - 12}:00 PM`}
+            📅 {(() => { const name = format(quickCreate.day, 'EEE d, MMMM', { locale: es }); return name.charAt(0).toUpperCase() + name.slice(1); })()} a las {quickCreate.hour === 0 ? '12:00 AM' : quickCreate.hour < 12 ? `${quickCreate.hour}:00 AM` : quickCreate.hour === 12 ? '12:00 PM' : `${quickCreate.hour - 12}:00 PM`}
           </div>
           <div className="quick-create-field" style={{ marginBottom: '8px' }}>
             <input 

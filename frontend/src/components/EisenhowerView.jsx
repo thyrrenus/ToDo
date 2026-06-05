@@ -88,7 +88,7 @@ export function EisenhowerView({ tasks, onSelectTask, onUpdateTaskPriority, onAd
   const activeIncompleteTasks = tasks.filter(t => !t.is_completed);
 
   return (
-    <div className="eisenhower-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', padding: '1rem 0' }}>
+    <div className="eisenhower-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: '100%', height: 'auto', padding: '1rem 0' }}>
       
       {/* Header Banner */}
       <div className="eisenhower-header" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

@@ -227,6 +227,7 @@ export function ProjectKanbanView({
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          minHeight: '480px',
           flexShrink: 0,
           transition: 'all 0.15s ease'
         }}
@@ -328,7 +329,8 @@ export function ProjectKanbanView({
       display: 'flex',
       gap: '1.25rem',
       overflowX: 'auto',
-      height: '100%',
+      minHeight: '100%',
+      height: 'auto',
       padding: '0.25rem 0 1rem 0',
       alignItems: 'flex-start',
       animation: 'fadeIn 0.25s ease'

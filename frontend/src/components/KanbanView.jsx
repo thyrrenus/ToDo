@@ -130,7 +130,7 @@ export function KanbanView({ tasks, lists, onSelectTask, onUpdateTaskPriority, o
   };
 
   return (
-    <div className="kanban-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', padding: '1rem 0', overflow: 'hidden' }}>
+    <div className="kanban-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: '100%', height: 'auto', padding: '1rem 0' }}>
       
       {/* Kanban Header */}
       <div className="kanban-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
@@ -198,7 +198,8 @@ export function KanbanView({ tasks, lists, onSelectTask, onUpdateTaskPriority, o
                 display: 'flex',
                 flexDirection: 'column',
                 padding: '1rem',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                minHeight: '480px'
               }}
               onDragEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'}
               onDragLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}

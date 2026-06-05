@@ -539,7 +539,7 @@ export function PomodoroView({
   const activeGlow = modeSettings[mode].glow;
 
   return (
-    <div className="pomodoro-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', height: '100%', padding: '1rem 0' }}>
+    <div className="pomodoro-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minHeight: '100%', height: 'auto', padding: '1rem 0' }}>
       
       {/* Top Banner Header */}
       <div className="pomodoro-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -597,7 +597,7 @@ export function PomodoroView({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2.5rem', flex: 1 }}>
+      <div className="pomodoro-view-grid">
         {/* Left Side: Timer and Mode Selectors */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '3rem 2rem' }}>
           
