@@ -5,17 +5,30 @@ import { sendNotification } from '../utils/notifications';
 import { isSameDay, parseISO, getHours, getMinutes, differenceInMinutes, startOfToday, format } from 'date-fns';
 import { adjustExternalDate } from '../utils/timezone';
 
-export function PomodoroView({ 
-  tasks = [], 
-  activeTaskId, 
-  onClearActiveTaskId,
-  lists = [],
-  externalEvents = [],
-  externalEventsError = null,
-  homeTimezone,
-  activeTimezoneMode,
-  onSelectTask
-}) {
+import { useTodo } from '../context/TodoContext';
+
+export function PomodoroView() {
+  const {
+    tasks = [],
+    activePomodoroTaskId: activeTaskId,
+    setActivePomodoroTaskId,
+    lists = [],
+    externalEvents = [],
+    externalEventsError = null,
+    homeTimezone,
+    activeTimezoneMode,
+    setSelectedTaskId: setGlobalSelectedTaskId,
+    setSelectedSubtaskId
+  } = useTodo();
+
+  const onClearActiveTaskId = () => {
+    setActivePomodoroTaskId(null);
+  };
+
+  const onSelectTask = (id) => {
+    setGlobalSelectedTaskId(id);
+    setSelectedSubtaskId(null);
+  };
   const isPiPSupported = 'documentPictureInPicture' in window;
   const [pipWindow, setPipWindow] = useState(null);
   const [mode, setMode] = useState('focus'); // 'focus', 'shortBreak', 'longBreak'

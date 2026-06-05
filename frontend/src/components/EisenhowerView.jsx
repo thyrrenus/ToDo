@@ -1,7 +1,21 @@
 import { useState } from 'react';
 import { AlertCircle, Calendar, CalendarDays, Trash2, Plus, LayoutGrid, Check } from 'lucide-react';
+import { useTodo } from '../context/TodoContext';
 
-export function EisenhowerView({ tasks, onSelectTask, onUpdateTaskPriority, onAddTaskInQuadrant, onTaskContextMenu }) {
+export function EisenhowerView() {
+  const {
+    tasks,
+    setSelectedTaskId,
+    setSelectedSubtaskId,
+    handleUpdateTaskPriority: onUpdateTaskPriority,
+    handleAddTaskInQuadrant: onAddTaskInQuadrant,
+    handleTaskContextMenu: onTaskContextMenu
+  } = useTodo();
+
+  const onSelectTask = (id) => {
+    setSelectedTaskId(id);
+    setSelectedSubtaskId(null);
+  };
   const [inlineTitles, setInlineTitles] = useState({
     3: '', // Q1
     2: '', // Q2

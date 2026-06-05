@@ -1,16 +1,24 @@
 import { useState } from 'react';
 import { Plus, Check, Calendar, AlignLeft, Trash2, Edit, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { useTodo } from '../context/TodoContext';
 
-export function ProjectKanbanView({ 
-  tasks, 
-  sections, 
-  activeList, 
-  onSelectTask, 
-  onToggleTask, 
-  onRefreshTasks, 
-  onRefreshSections 
-}) {
+export function ProjectKanbanView() {
+  const {
+    tasks,
+    sections,
+    activeList,
+    setSelectedTaskId,
+    setSelectedSubtaskId,
+    handleToggleTask: onToggleTask,
+    fetchTasks: onRefreshTasks,
+    fetchSections: onRefreshSections
+  } = useTodo();
+
+  const onSelectTask = (id) => {
+    setSelectedTaskId(id);
+    setSelectedSubtaskId(null);
+  };
   const [newSectionName, setNewSectionName] = useState('');
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [quickAddTitles, setQuickAddTitles] = useState({}); // { sectionId: 'text' }

@@ -5,9 +5,45 @@ import { format, parseISO, addDays, startOfWeek, endOfWeek, addMonths, startOfMo
 import { runAITask } from '../utils/aiManager';
 import { adjustExternalDate } from '../utils/timezone';
 
-export function TaskDetail({ task, subtask, sections = [], allTasks = [], externalEvents = [], onClose, onUpdate, onDelete, onDeleteSubtask, homeTimezone, activeTimezoneMode, onSelectTask }) {
+import { useTodo } from '../context/TodoContext';
+
+export function TaskDetail() {
+  const {
+    selectedTaskId,
+    selectedSubtaskId,
+    setSelectedTaskId,
+    setSelectedSubtaskId,
+    sections = [],
+    tasks: allTasks = [],
+    externalEvents = [],
+    fetchTasks: onUpdate,
+    handleDeleteTask: onDelete,
+    handleDeleteSubtask: onDeleteSubtask,
+    homeTimezone,
+    activeTimezoneMode
+  } = useTodo();
+
+  const task = selectedTaskId ? allTasks.find(t => t.id === selectedTaskId) : null;
+  let subtask = null;
+  if (selectedSubtaskId) {
+    for (const t of allTasks) {
+      const found = (t.subtasks || []).find(st => st.id === selectedSubtaskId);
+      if (found) {
+        subtask = found;
+        break;
+      }
+    }
+  }
+
   const isSubtaskMode = !!subtask;
   const currentItem = isSubtaskMode ? subtask : task;
+
+  const onClose = () => {
+    setSelectedTaskId(null);
+    setSelectedSubtaskId(null);
+  };
+
+  const onSelectTask = setSelectedTaskId;
 
   const formatDateTimeForInput = (str) => {
     if (!str) return '';

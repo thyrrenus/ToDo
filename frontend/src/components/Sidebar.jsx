@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTodo } from '../context/TodoContext';
 import { 
   Inbox, Calendar, CalendarDays, Plus, Check, X, Edit, Trash2, Folder, FolderPlus, ChevronDown, ChevronRight,
   Briefcase, Home, ShoppingCart, Heart, BookOpen, Plane, Flame, GraduationCap, Users, Code, DollarSign, Inbox as InboxIcon,
@@ -39,20 +40,26 @@ const ICON_MAP = {
   Inbox: InboxIcon
 };
 
-export function Sidebar({ 
-  activeList, 
-  setActiveList, 
-  lists, 
-  onRefreshLists, 
-  tasks = [], 
-  tags = [], 
-  activeTagFilter, 
-  setActiveTagFilter,
-  listGroups = [],
-  onRefreshListGroups,
-  onUpdateTaskList,
-  onRescheduleTask
-}) {
+export function Sidebar() {
+  const {
+    activeList,
+    setActiveList: rawSetActiveList,
+    lists,
+    fetchLists: onRefreshLists,
+    tasks = [],
+    tags = [],
+    activeTagFilter,
+    setActiveTagFilter,
+    listGroups = [],
+    fetchListGroups: onRefreshListGroups,
+    handleUpdateTaskList: onUpdateTaskList,
+    handleRescheduleTask: onRescheduleTask
+  } = useTodo();
+
+  const setActiveList = (val) => {
+    rawSetActiveList(val);
+    setActiveTagFilter(null);
+  };
   const [isAdding, setIsAdding] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);

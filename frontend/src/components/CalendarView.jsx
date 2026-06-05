@@ -2,22 +2,30 @@ import { useState, useEffect } from 'react';
 import { startOfWeek, addDays, format, isSameDay, parseISO, getHours, getMinutes, differenceInMinutes, startOfToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { adjustExternalDate } from '../utils/timezone';
+import { useTodo } from '../context/TodoContext';
 
-export function CalendarView({ 
-  tasks = [], 
-  lists = [], 
-  externalEvents = [], 
-  externalEventsError = null, 
-  onRetrySync, 
-  onSelectTask, 
-  onSelectEvent, 
-  onUpdateEvent, 
-  homeTimezone, 
-  activeTimezoneMode,
-  onAddTask,
-  onUpdateTask,
-  onDeleteTask
-}) {
+export function CalendarView() {
+  const { 
+    tasks = [], 
+    lists = [], 
+    externalEvents = [], 
+    externalEventsError = null, 
+    fetchExternalEvents: onRetrySync, 
+    handleSelectEvent: onSelectEvent, 
+    handleUpdateEventDates: onUpdateEvent, 
+    homeTimezone, 
+    activeTimezoneMode,
+    handleAddTask: onAddTask,
+    handleUpdateTask: onUpdateTask,
+    handleDeleteTask: onDeleteTask,
+    setSelectedTaskId,
+    setSelectedSubtaskId
+  } = useTodo();
+
+  const onSelectTask = (id) => {
+    setSelectedTaskId(id);
+    setSelectedSubtaskId(null);
+  };
   const [viewMode, setViewMode] = useState('week'); // 'day' or 'week'
   const [currentDate, setCurrentDate] = useState(startOfToday());
   const [interactionState, setInteractionState] = useState(null);

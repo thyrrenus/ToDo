@@ -1,6 +1,8 @@
 import { CheckSquare, CalendarDays, Timer, LayoutGrid, Briefcase, Columns, BarChart2, Users, Settings, Shield, LogOut } from 'lucide-react';
+import { useTodo } from '../context/TodoContext';
 
-export function GlobalSidebar({ mainView, setMainView, onLogout, user }) {
+export function GlobalSidebar() {
+  const { mainView, setMainView, logout: onLogout, user } = useTodo();
   return (
     <nav className="global-sidebar">
       <button 

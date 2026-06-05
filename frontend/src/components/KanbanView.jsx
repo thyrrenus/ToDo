@@ -1,7 +1,23 @@
 import { useState } from 'react';
 import { Columns, Calendar, ListTodo, Plus, Check } from 'lucide-react';
+import { useTodo } from '../context/TodoContext';
 
-export function KanbanView({ tasks, lists, onSelectTask, onUpdateTaskPriority, onUpdateTaskList, onAddTaskInQuadrant, onTaskContextMenu }) {
+export function KanbanView() {
+  const {
+    tasks,
+    lists,
+    setSelectedTaskId,
+    setSelectedSubtaskId,
+    handleUpdateTaskPriority: onUpdateTaskPriority,
+    handleUpdateTaskList: onUpdateTaskList,
+    handleAddTaskInQuadrant: onAddTaskInQuadrant,
+    handleTaskContextMenu: onTaskContextMenu
+  } = useTodo();
+
+  const onSelectTask = (id) => {
+    setSelectedTaskId(id);
+    setSelectedSubtaskId(null);
+  };
   const [groupBy, setGroupBy] = useState('list'); // 'list', 'priority', 'status'
   const [inlineTitles, setInlineTitles] = useState({});
 
