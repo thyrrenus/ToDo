@@ -2667,3 +2667,92 @@ input:checked + .slider:before {
   }
 }
 
+/* Connectivity Status Indicator Premium Badge */
+.connectivity-badge {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 8px 14px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 99999;
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: connectivityFadeIn 0.3s ease-out;
+  transition: all 0.3s ease;
+}
+
+.connectivity-badge.offline {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.connectivity-badge.sync-pending {
+  background-color: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.connectivity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.connectivity-badge.offline .connectivity-dot {
+  background-color: #ef4444;
+  animation: connectivityPulseRed 1.8s infinite ease-in-out;
+}
+
+.connectivity-badge.sync-pending .connectivity-dot {
+  background-color: #f59e0b;
+  animation: connectivityPulseAmber 1.8s infinite ease-in-out;
+}
+
+@keyframes connectivityFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes connectivityPulseRed {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes connectivityPulseAmber {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+

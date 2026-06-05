@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { sendNotification } from '../utils/notifications';
 import { parseTimezoneOffset, adjustExternalDate } from '../utils/timezone';
+import { db } from '../utils/db';
 
 // --- SECURE API FETCH INTERCEPTOR FOR JWT ---
 const originalFetch = window.fetch;
@@ -318,6 +319,109 @@ export function TodoProvider({ children }) {
   // --- SYNCHRONIZATION & TOASTS ---
   const [activeRequests, setActiveRequests] = useState(0);
 
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [offlineSimulated, setOfflineSimulated] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  const toggleOfflineSimulation = () => {
+    const nextState = !offlineSimulated;
+    setOfflineSimulated(nextState);
+    if (nextState) {
+      Object.defineProperty(navigator, 'onLine', {
+        get: () => false,
+        configurable: true
+      });
+      window.dispatchEvent(new Event('offline'));
+    } else {
+      Object.defineProperty(navigator, 'onLine', {
+        get: () => true,
+        configurable: true
+      });
+      window.dispatchEvent(new Event('online'));
+    }
+  };
+
+  const updatePendingSyncCount = async () => {
+    try {
+      const queue = await db.getQueue();
+      setPendingSyncCount(queue.length);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const triggerSync = async () => {
+    if (!navigator.onLine) return;
+    try {
+      const queue = await db.getQueue();
+      if (queue.length === 0) return;
+
+      for (const action of queue) {
+        try {
+          const { url, method, body, tempId } = action;
+          const fetchOptions = {
+            method,
+            headers: { 'Content-Type': 'application/json' }
+          };
+          if (body) {
+            fetchOptions.body = JSON.stringify(body);
+          }
+
+          const res = await fetch(url, fetchOptions);
+          if (res.ok) {
+            if (method === 'POST' && tempId) {
+              const data = await res.json();
+              if (data && data.id) {
+                if (url.includes('/tasks')) {
+                  await db.deleteItem('tasks', tempId);
+                }
+              }
+            }
+            await db.dequeueAction(action.id);
+          } else {
+            console.error('Failed to sync action:', action, res.statusText);
+            if (res.status >= 400 && res.status < 500) {
+              await db.dequeueAction(action.id);
+            } else {
+              break;
+            }
+          }
+        } catch (err) {
+          console.error('Error syncing action:', err);
+          break;
+        }
+      }
+      
+      await updatePendingSyncCount();
+      fetchTasks();
+      fetchLists();
+      fetchSections();
+      fetchTags();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    updatePendingSyncCount();
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      triggerSync();
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   useEffect(() => {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
@@ -382,15 +486,20 @@ export function TodoProvider({ children }) {
       const res = await fetch('/api/tasks');
       if (res.ok) {
         const data = await res.json();
-        setTasks(Array.isArray(data) ? data : []);
+        const verified = Array.isArray(data) ? data : [];
+        setTasks(verified);
+        db.saveCollection('tasks', verified).catch(e => console.error(e));
       } else {
         console.error('Failed to fetch tasks:', res.statusText);
-        setTasks([]);
+        const local = await db.getCollection('tasks');
+        setTasks(local);
       }
       fetchTags();
     } catch (err) {
       console.error(err);
-      setTasks([]);
+      const local = await db.getCollection('tasks');
+      setTasks(local);
+      fetchTags();
     }
   };
 
@@ -400,11 +509,16 @@ export function TodoProvider({ children }) {
       const res = await fetch('/api/lists');
       if (res.ok) {
         const data = await res.json();
-        setLists(Array.isArray(data) ? data : []);
+        const verified = Array.isArray(data) ? data : [];
+        setLists(verified);
+        db.saveCollection('lists', verified).catch(e => console.error(e));
       }
       fetchListGroups();
     } catch (err) {
       console.error(err);
+      const local = await db.getCollection('lists');
+      setLists(local);
+      fetchListGroups();
     }
   };
 
@@ -414,10 +528,14 @@ export function TodoProvider({ children }) {
       const res = await fetch('/api/list-groups');
       if (res.ok) {
         const data = await res.json();
-        setListGroups(Array.isArray(data) ? data : []);
+        const verified = Array.isArray(data) ? data : [];
+        setListGroups(verified);
+        db.saveCollection('listGroups', verified).catch(e => console.error(e));
       }
     } catch (err) {
       console.error(err);
+      const local = await db.getCollection('listGroups');
+      setListGroups(local);
     }
   };
 
@@ -427,26 +545,34 @@ export function TodoProvider({ children }) {
       const res = await fetch('/api/sections');
       if (res.ok) {
         const data = await res.json();
-        setSections(Array.isArray(data) ? data : []);
+        const verified = Array.isArray(data) ? data : [];
+        setSections(verified);
+        db.saveCollection('sections', verified).catch(e => console.error(e));
       }
     } catch (err) {
       console.error(err);
+      const local = await db.getCollection('sections');
+      setSections(local);
     }
   };
 
+  const [localTagsLoading, setLocalTagsLoading] = useState(false);
   const fetchTags = async () => {
     if (!token) return;
     try {
       const res = await fetch('/api/tags');
       if (res.ok) {
         const data = await res.json();
-        setTags(Array.isArray(data) ? data : []);
+        const verified = Array.isArray(data) ? data : [];
+        setTags(verified);
+        db.saveCollection('tags', verified).catch(e => console.error(e));
       } else {
         setTags([]);
       }
     } catch (err) {
       console.error(err);
-      setTags([]);
+      const local = await db.getCollection('tags');
+      setTags(local);
     }
   };
 
@@ -485,6 +611,37 @@ export function TodoProvider({ children }) {
       return next;
     });
 
+    // Optimistic UI state update
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: nextCompleted ? 1 : 0 } : t));
+
+    try {
+      const allTasks = await db.getCollection('tasks');
+      const target = allTasks.find(t => t.id === taskId);
+      if (target) {
+        target.is_completed = nextCompleted ? 1 : 0;
+        await db.saveItem('tasks', target);
+      }
+    } catch (e) {
+      console.error('Local DB update failed:', e);
+    }
+
+    const actionData = {
+      url: `/api/tasks/${taskId}`,
+      method: 'PUT',
+      body: { is_completed: nextCompleted ? 1 : 0 }
+    };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      setSyncingTaskIds(prev => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+      return;
+    }
+
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
@@ -493,9 +650,14 @@ export function TodoProvider({ children }) {
       });
       if (res.ok) {
         await fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
       }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     } finally {
       setSyncingTaskIds(prev => {
         const next = new Set(prev);
@@ -510,60 +672,200 @@ export function TodoProvider({ children }) {
       fetchTasks();
       return;
     }
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority } : t));
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const allTasks = await db.getCollection('tasks');
+      const target = allTasks.find(t => t.id === taskId);
+      if (target) {
+        target.priority = priority;
+        await db.saveItem('tasks', target);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const bodyData = { priority };
+    const actionData = { url: `/api/tasks/${taskId}`, method: 'PUT', body: bodyData };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priority })
+        body: JSON.stringify(bodyData)
       });
-      fetchTasks();
+      if (res.ok) {
+        await fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
+      }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleUpdateTaskList = async (taskId, listId) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, list_id: listId } : t));
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const allTasks = await db.getCollection('tasks');
+      const target = allTasks.find(t => t.id === taskId);
+      if (target) {
+        target.list_id = listId;
+        await db.saveItem('tasks', target);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const bodyData = { list_id: listId };
+    const actionData = { url: `/api/tasks/${taskId}`, method: 'PUT', body: bodyData };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ list_id: listId })
+        body: JSON.stringify(bodyData)
       });
-      fetchTasks();
+      if (res.ok) {
+        await fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
+      }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleUpdateTaskSection = async (taskId, sectionId) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, section_id: sectionId } : t));
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const allTasks = await db.getCollection('tasks');
+      const target = allTasks.find(t => t.id === taskId);
+      if (target) {
+        target.section_id = sectionId;
+        await db.saveItem('tasks', target);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const bodyData = { section_id: sectionId };
+    const actionData = { url: `/api/tasks/${taskId}`, method: 'PUT', body: bodyData };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section_id: sectionId })
+        body: JSON.stringify(bodyData)
       });
-      fetchTasks();
+      if (res.ok) {
+        await fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
+      }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleRescheduleTask = async (taskId, offsetDays) => {
     const date = addDays(new Date(), offsetDays);
     const dueDateStr = format(date, 'yyyy-MM-dd');
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: dueDateStr } : t));
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const allTasks = await db.getCollection('tasks');
+      const target = allTasks.find(t => t.id === taskId);
+      if (target) {
+        target.due_date = dueDateStr;
+        await db.saveItem('tasks', target);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const bodyData = { due_date: dueDateStr };
+    const actionData = { url: `/api/tasks/${taskId}`, method: 'PUT', body: bodyData };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ due_date: dueDateStr })
+        body: JSON.stringify(bodyData)
       });
-      fetchTasks();
+      if (res.ok) {
+        await fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
+      }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleAddTask = async (taskData) => {
+    const tempId = 'offline_' + Date.now() + '_' + Math.random();
+    const newTask = {
+      ...taskData,
+      id: tempId,
+      is_completed: 0,
+      subtasks: [],
+      tags: taskData.tags ? taskData.tags.map(name => {
+        const existing = tags.find(t => t.name.toLowerCase() === name.toLowerCase());
+        return existing || { id: 'tag_' + Math.random(), name };
+      }) : []
+    };
+
+    setTasks(prev => [newTask, ...prev]);
+    try {
+      await db.saveItem('tasks', newTask);
+    } catch (e) {
+      console.error(e);
+    }
+
+    const actionData = { url: '/api/tasks', method: 'POST', body: taskData, tempId };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
@@ -571,15 +873,41 @@ export function TodoProvider({ children }) {
         body: JSON.stringify(taskData)
       });
       if (res.ok) {
+        await db.deleteItem('tasks', tempId);
         fetchTasks();
         fetchTags();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
       }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleUpdateTask = async (taskId, updatedFields) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updatedFields } : t));
+    try {
+      const allTasks = await db.getCollection('tasks');
+      const target = allTasks.find(t => t.id === taskId);
+      if (target) {
+        const updated = { ...target, ...updatedFields };
+        await db.saveItem('tasks', updated);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const actionData = { url: `/api/tasks/${taskId}`, method: 'PUT', body: updatedFields };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
@@ -587,42 +915,92 @@ export function TodoProvider({ children }) {
         body: JSON.stringify(updatedFields)
       });
       if (res.ok) {
-        fetchTasks();
+        await fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
       }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleDeleteTask = async (taskId) => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await db.deleteItem('tasks', taskId);
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (selectedTaskId === taskId) {
+      setSelectedTaskId(null);
+    }
+
+    const actionData = { url: `/api/tasks/${taskId}`, method: 'DELETE' };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        if (selectedTaskId === taskId) {
-          setSelectedTaskId(null);
-        }
         fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
       }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
   const handleDeleteSubtask = async (subtaskId) => {
+    setTasks(prev => prev.map(t => {
+      if (t.subtasks) {
+        return {
+          ...t,
+          subtasks: t.subtasks.filter(st => st.id !== subtaskId)
+        };
+      }
+      return t;
+    }));
+
+    if (selectedSubtaskId === subtaskId) {
+      setSelectedSubtaskId(null);
+    }
+
+    const actionData = { url: `/api/subtasks/${subtaskId}`, method: 'DELETE' };
+
+    if (!navigator.onLine) {
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
+      return;
+    }
+
     try {
       const res = await fetch(`/api/subtasks/${subtaskId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        if (selectedSubtaskId === subtaskId) {
-          setSelectedSubtaskId(null);
-        }
         fetchTasks();
+      } else {
+        await db.enqueueAction(actionData);
+        await updatePendingSyncCount();
       }
     } catch (err) {
       console.error(err);
+      await db.enqueueAction(actionData);
+      await updatePendingSyncCount();
     }
   };
 
@@ -1159,6 +1537,10 @@ export function TodoProvider({ children }) {
 
       activeRequests,
       setActiveRequests,
+      isOffline,
+      offlineSimulated,
+      toggleOfflineSimulation,
+      pendingSyncCount,
       syncingTaskIds,
       externalEvents,
       externalEventsError,
