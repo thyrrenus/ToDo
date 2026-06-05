@@ -348,6 +348,25 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     return null;
   };
 
+  const getEditorContext = () => {
+    const quill = quillRef.current;
+    if (!quill) return null;
+
+    const range = quill.getSelection();
+    if (!range) return null;
+
+    const [line] = quill.getLine(range.index);
+    if (!line) return null;
+
+    const lineIndex = quill.getIndex(line);
+    const cursorOffset = range.index - lineIndex;
+    const lineLength = line.length();
+    const lineText = quill.getText(lineIndex, lineLength - 1);
+    const textBeforeCursor = lineText.slice(0, cursorOffset);
+
+    return { quill, range, line, lineIndex, cursorOffset, lineLength, lineText, textBeforeCursor };
+  };
+
   const getIsCursorInTable = () => {
     return !!getSelectedCellElement();
   };
@@ -562,28 +581,19 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
 
     // 4. Slash (/), Hash (#), and Emoji (:) Menu Selection Change Trigger
     const checkSlashCommand = () => {
-      const range = quill.getSelection();
-      if (!range) {
+      const context = getEditorContext();
+      if (!context) {
         setShowSlashMenu(false);
+        setShowHashMenu(false);
+        setShowEmojiMenu(false);
         return;
       }
-
-      const [line] = quill.getLine(range.index);
-      if (!line) {
-        setShowSlashMenu(false);
-        return;
-      }
-      const lineIndex = quill.getIndex(line);
-      const cursorOffset = range.index - lineIndex;
-      const lineLength = line.length();
-      
-      const lineText = quill.getText(lineIndex, lineLength - 1);
-      const textBeforeCursor = lineText.slice(0, cursorOffset);
+      const { range, textBeforeCursor } = context;
 
       if (textBeforeCursor.startsWith('/')) {
         const query = textBeforeCursor.slice(1);
         setSlashQuery(query);
-        const bounds = quill.getBounds(range.index);
+        const bounds = quillRef.current.getBounds(range.index);
         
         setMenuPosition({
           top: bounds.top + bounds.height + 4,
@@ -604,7 +614,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           const query = textBeforeCursor.slice(hashIndex + 1);
           if (!query.includes(' ')) {
             setHashQuery(query);
-            const bounds = quill.getBounds(range.index);
+            const bounds = quillRef.current.getBounds(range.index);
             setHashMenuPosition({
               top: bounds.top + bounds.height + 4,
               left: bounds.left
@@ -624,7 +634,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           const query = textBeforeCursor.slice(colonIndex + 1);
           if (!query.includes(' ') && query.length > 0) {
             setEmojiQuery(query);
-            const bounds = quill.getBounds(range.index);
+            const bounds = quillRef.current.getBounds(range.index);
             setEmojiMenuPosition({
               top: bounds.top + bounds.height + 4,
               left: bounds.left
@@ -672,18 +682,9 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     const handleTextChangeMarkdown = (delta, oldDelta, source) => {
       if (source !== 'user') return;
 
-      const range = quill.getSelection();
-      if (!range) return;
-
-      const [line] = quill.getLine(range.index);
-      if (!line) return;
-
-      const lineIndex = quill.getIndex(line);
-      const cursorOffset = range.index - lineIndex;
-      const lineLength = line.length();
-      
-      const lineText = quill.getText(lineIndex, lineLength - 1);
-      const textBeforeCursor = lineText.slice(0, cursorOffset);
+      const context = getEditorContext();
+      if (!context) return;
+      const { quill, lineIndex, cursorOffset, textBeforeCursor } = context;
 
       if (textBeforeCursor.endsWith(' ')) {
         const trimmed = textBeforeCursor.slice(0, -1);
@@ -825,19 +826,9 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   }, [value]);
 
   const selectHashOption = (taskItem) => {
-    const quill = quillRef.current;
-    if (!quill) return;
-
-    const range = quill.getSelection();
-    if (!range) return;
-
-    const [line] = quill.getLine(range.index);
-    if (!line) return;
-    const lineIndex = quill.getIndex(line);
-    const cursorOffset = range.index - lineIndex;
-
-    const lineText = quill.getText(lineIndex, line.length() - 1);
-    const textBeforeCursor = lineText.slice(0, cursorOffset);
+    const context = getEditorContext();
+    if (!context) return;
+    const { quill, lineIndex, cursorOffset, textBeforeCursor } = context;
     const hashIndex = textBeforeCursor.lastIndexOf('#');
 
     if (hashIndex !== -1) {
@@ -859,19 +850,9 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const selectEmojiOption = (emojiItem) => {
-    const quill = quillRef.current;
-    if (!quill) return;
-
-    const range = quill.getSelection();
-    if (!range) return;
-
-    const [line] = quill.getLine(range.index);
-    if (!line) return;
-    const lineIndex = quill.getIndex(line);
-    const cursorOffset = range.index - lineIndex;
-
-    const lineText = quill.getText(lineIndex, line.length() - 1);
-    const textBeforeCursor = lineText.slice(0, cursorOffset);
+    const context = getEditorContext();
+    if (!context) return;
+    const { quill, lineIndex, cursorOffset, textBeforeCursor } = context;
     const colonIndex = textBeforeCursor.lastIndexOf(':');
 
     if (colonIndex !== -1) {
@@ -890,16 +871,9 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const selectOption = (option) => {
-    const quill = quillRef.current;
-    if (!quill) return;
-
-    const range = quill.getSelection();
-    if (!range) return;
-
-    const [line] = quill.getLine(range.index);
-    if (!line) return;
-    const lineIndex = quill.getIndex(line);
-    const cursorOffset = range.index - lineIndex;
+    const context = getEditorContext();
+    if (!context) return;
+    const { quill, line, lineIndex, cursorOffset } = context;
 
     quill.deleteText(lineIndex, cursorOffset);
 
