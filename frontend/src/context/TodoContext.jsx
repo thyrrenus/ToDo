@@ -307,7 +307,7 @@ export function TodoProvider({ children }) {
 
   // --- FILTER STATES ---
   const [filterPriority, setFilterPriority] = useState(null);
-  const [filterHideCompleted, setFilterHideCompleted] = useState(false);
+  const [filterHideCompleted, setFilterHideCompleted] = useState(true);
   const [filterTagId, setFilterTagId] = useState(null);
 
   // --- VOICE & SPEECH STATES ---

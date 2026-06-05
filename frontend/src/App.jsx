@@ -741,10 +741,10 @@ function App() {
                   type="button"
                   onClick={() => setFilterHideCompleted(prev => !prev)}
                   style={{
-                    background: filterHideCompleted ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                    border: filterHideCompleted ? '1.5px solid var(--accent-color)' : '1.5px solid rgba(255, 255, 255, 0.05)',
+                    background: !filterHideCompleted ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    border: !filterHideCompleted ? '1.5px solid var(--accent-hover, #7c3aed)' : '1.5px solid rgba(255, 255, 255, 0.05)',
                     borderRadius: '20px',
-                    color: filterHideCompleted ? 'var(--accent-color)' : 'var(--text-secondary)',
+                    color: !filterHideCompleted ? '#ffffff' : 'var(--text-secondary)',
                     padding: '5px 12px',
                     fontSize: '0.78rem',
                     fontWeight: 600,
@@ -752,14 +752,14 @@ function App() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    boxShadow: filterHideCompleted ? '0 0 10px rgba(59, 130, 246, 0.25)' : 'none',
+                    boxShadow: !filterHideCompleted ? '0 0 10px rgba(59, 130, 246, 0.25)' : 'none',
                     transition: 'all 0.2s ease',
                     flexShrink: 0
                   }}
-                  onMouseEnter={e => { if (!filterHideCompleted) e.currentTarget.style.borderColor = 'var(--accent-color)'; }}
-                  onMouseLeave={e => { if (!filterHideCompleted) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                  onMouseEnter={e => { if (filterHideCompleted) e.currentTarget.style.borderColor = 'var(--accent-hover, #7c3aed)'; }}
+                  onMouseLeave={e => { if (filterHideCompleted) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
                 >
-                  👁️ {filterHideCompleted ? 'Completadas Ocultas' : 'Ocultar Completadas'}
+                  👁️ {filterHideCompleted ? 'Mostrar Completadas' : 'Completadas Visibles'}
                 </button>
 
                 {/* Vertical Divider */}
