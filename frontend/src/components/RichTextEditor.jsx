@@ -58,6 +58,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   const [hoveredCell, setHoveredCell] = useState(null);
   const [colButtonPos, setColButtonPos] = useState({ top: 0, left: 0, visible: false });
   const [rowButtonPos, setRowButtonPos] = useState({ top: 0, left: 0, visible: false });
+  const [activeCell, setActiveCell] = useState(null);
+  const [tableToolbarPos, setTableToolbarPos] = useState({ top: 0, left: 0, visible: false });
   const tableHoverTimeoutRef = useRef(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
@@ -325,25 +327,29 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     setShowContextMenu(false);
   };
 
-  const getIsCursorInTable = () => {
+  const getSelectedCellElement = () => {
     const quill = quillRef.current;
-    if (!quill) return false;
+    if (!quill) return null;
     
     try {
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
         let node = selection.getRangeAt(0).startContainer;
         while (node && node !== quill.root) {
-          if (node.nodeName === 'TD' || node.nodeName === 'TH' || node.nodeName === 'TABLE') {
-            return true;
+          if (node.nodeName === 'TD' || node.nodeName === 'TH') {
+            return node;
           }
           node = node.parentNode;
         }
       }
     } catch (e) {
-      console.error(e);
+      console.error('Failed to get active cell:', e);
     }
-    return false;
+    return null;
+  };
+
+  const getIsCursorInTable = () => {
+    return !!getSelectedCellElement();
   };
 
   const handleTableAction = (action) => {
@@ -524,8 +530,10 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       const wrapper = quill.root.closest('.rich-text-editor-container');
       if (!wrapper) return;
 
-      if (getIsCursorInTable()) {
-        return;
+      // Select clicked cell if right-clicked inside a table to ensure context menu actions apply to it
+      const clickedCell = e.target.closest('td, th');
+      if (clickedCell) {
+        selectCell(clickedCell);
       }
 
       e.preventDefault();
@@ -628,8 +636,37 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
       setShowEmojiMenu(false);
     };
+    const checkActiveCell = () => {
+      setTimeout(() => {
+        const cell = getSelectedCellElement();
+        if (cell) {
+          setActiveCell(cell);
+          const wrapper = quill.root.closest('.rich-text-editor-container');
+          if (wrapper) {
+            const cellRect = cell.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
+            
+            // Position above active cell
+            const left = cellRect.left - wrapperRect.left + wrapper.scrollLeft + (cellRect.width / 2) - 130;
+            const top = cellRect.top - wrapperRect.top + wrapper.scrollTop - 42;
+            
+            setTableToolbarPos({
+              left: Math.max(8, left),
+              top: top > 0 ? top : cellRect.bottom - wrapperRect.top + wrapper.scrollTop + 8,
+              visible: true
+            });
+          }
+        } else {
+          setActiveCell(null);
+          setTableToolbarPos(prev => ({ ...prev, visible: false }));
+        }
+      }, 0);
+    };
+
     quill.on('selection-change', checkSlashCommand);
     quill.on('text-change', checkSlashCommand);
+    quill.on('selection-change', checkActiveCell);
+    quill.on('text-change', checkActiveCell);
 
     // 5. User Input Real-time Markdown Auto-conversion
     const handleTextChangeMarkdown = (delta, oldDelta, source) => {
@@ -750,6 +787,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       quill.off('text-change', handleTextChangeCallback);
       quill.off('selection-change', checkSlashCommand);
       quill.off('text-change', checkSlashCommand);
+      quill.off('selection-change', checkActiveCell);
+      quill.off('text-change', checkActiveCell);
       quill.off('text-change', handleTextChangeMarkdown);
       quill.off('selection-change', handleSelectionChangeSubtask);
       
@@ -1020,6 +1059,61 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
       </button>
+
+      {tableToolbarPos.visible && activeCell && (
+        <div
+          className="table-bubble-toolbar"
+          style={{
+            position: 'absolute',
+            left: tableToolbarPos.left,
+            top: tableToolbarPos.top,
+            zIndex: 10005
+          }}
+        >
+          <button
+            className="table-bubble-btn"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleTableAction('insertRowBelow')}
+            title="Insertar fila abajo"
+          >
+            <span>+ Fila</span>
+          </button>
+          <button
+            className="table-bubble-btn"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleTableAction('deleteRow')}
+            title="Eliminar fila actual"
+          >
+            <span>- Fila</span>
+          </button>
+          <div className="table-bubble-divider" />
+          <button
+            className="table-bubble-btn"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleTableAction('insertColumnRight')}
+            title="Insertar columna a la derecha"
+          >
+            <span>+ Col</span>
+          </button>
+          <button
+            className="table-bubble-btn"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleTableAction('deleteColumn')}
+            title="Eliminar columna actual"
+          >
+            <span>- Col</span>
+          </button>
+          <div className="table-bubble-divider" />
+          <button
+            className="table-bubble-btn danger"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleTableAction('deleteTable')}
+            title="Eliminar tabla completa"
+          >
+            <span>🗑️ Tabla</span>
+          </button>
+        </div>
+      )}
 
       {showContextMenu && (
         <div 

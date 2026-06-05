@@ -2571,3 +2571,57 @@ input:checked + .slider:before {
   height: 14px;
   stroke-width: 2.5px;
 }
+
+/* Table Quick Action Bubble Toolbar Styles */
+.table-bubble-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(22, 22, 29, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  animation: fadeInQuickCreate 0.15s ease-out;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.table-bubble-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.table-bubble-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.table-bubble-btn.danger {
+  color: #f87171;
+}
+
+.table-bubble-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.table-bubble-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 2px;
+}
