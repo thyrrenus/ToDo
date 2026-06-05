@@ -23,6 +23,7 @@ const AdminView = lazy(() => import('./components/AdminView').then(m => ({ defau
 const SharedTasksView = lazy(() => import('./components/SharedTasksView').then(m => ({ default: m.SharedTasksView })));
 const ProjectKanbanView = lazy(() => import('./components/ProjectKanbanView').then(m => ({ default: m.ProjectKanbanView })));
 const AddTaskWidget = lazy(() => import('./components/AddTaskWidget').then(m => ({ default: m.AddTaskWidget })));
+const CompletedView = lazy(() => import('./components/CompletedView').then(m => ({ default: m.CompletedView })));
 
 import { Inbox, Plus, Mic, X, Wifi, WifiOff } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
@@ -334,6 +335,7 @@ function App() {
     if (activeList === 'inbox') return 'Inbox';
     if (activeList === 'today') return 'Today';
     if (activeList === 'upcoming') return 'Upcoming';
+    if (activeList === 'completed') return 'Completadas';
     const list = lists.find(l => l.id === activeList);
     return list ? list.name : 'Tasks';
   };
@@ -495,7 +497,10 @@ function App() {
                 style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
               >
                 {mainView === 'tasks' ? (
-            <>
+                  activeList === 'completed' ? (
+                    <CompletedView />
+                  ) : (
+                    <>
               <header className="header ticktick-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <h1 style={{ marginBottom: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1032,7 +1037,8 @@ function App() {
                 />
               )}
             </>
-          ) : mainView === 'calendar' ? (
+          )
+        ) : mainView === 'calendar' ? (
             <CalendarView />
           ) : mainView === 'pomodoro' ? (
             <PomodoroView />

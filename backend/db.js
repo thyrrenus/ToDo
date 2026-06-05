@@ -205,8 +205,10 @@ const initDb = async () => {
      ALTER TABLE lists ADD COLUMN icon TEXT;
      ALTER TABLE list_groups ADD COLUMN icon TEXT;
      ALTER TABLE tasks ADD COLUMN recurrence_type TEXT DEFAULT 'none';
-     ALTER TABLE users ADD COLUMN outlook_ical_url TEXT;
-   `);
+      ALTER TABLE users ADD COLUMN outlook_ical_url TEXT;
+      ALTER TABLE tasks ADD COLUMN completed_at DATETIME;
+      ALTER TABLE subtasks ADD COLUMN completed_at DATETIME;
+    `);
 
   // Create Indexes for performance optimization on foreign keys
   await db.exec(`

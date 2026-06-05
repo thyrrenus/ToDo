@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTodo } from '../context/TodoContext';
 import { 
-  Inbox, Calendar, CalendarDays, Plus, Check, X, Edit, Trash2, Folder, FolderPlus, ChevronDown, ChevronRight,
+  Inbox, Calendar, CalendarDays, Plus, Check, CheckCircle2, X, Edit, Trash2, Folder, FolderPlus, ChevronDown, ChevronRight,
   Briefcase, Home, ShoppingCart, Heart, BookOpen, Plane, Flame, GraduationCap, Users, Code, DollarSign, Inbox as InboxIcon,
   FolderHeart, FolderLock, FolderCode, FolderArchive, FolderClock
 } from 'lucide-react';
@@ -718,6 +718,18 @@ export function Sidebar() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Completed Section */}
+      <div className="nav-section" style={{ marginTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+        <a 
+          className={`nav-item ${activeList === 'completed' ? 'active' : ''}`}
+          onClick={() => setActiveList('completed')}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s' }}
+        >
+          <CheckCircle2 size={16} style={{ opacity: 0.7 }} />
+          <span style={{ fontSize: '0.85rem' }}>Completadas</span>
+        </a>
       </div>
 
       {/* --- PREMIUM CREATION / EDITING OVERLAY MODAL --- */}

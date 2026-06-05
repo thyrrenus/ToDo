@@ -537,6 +537,15 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para actualizar esta tarea.' });
     }
 
+    let completedAt = current.completed_at;
+    if (is_completed !== undefined) {
+      if (!!is_completed && !current.is_completed) {
+        completedAt = new Date().toISOString();
+      } else if (!is_completed) {
+        completedAt = null;
+      }
+    }
+
     // Clone recurring task for next occurrence if marked completed
     const isMarkedCompleted = (is_completed !== undefined && !!is_completed) && !current.is_completed;
     if (isMarkedCompleted) {
@@ -602,7 +611,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
 
     await db.prepare(`
       UPDATE tasks 
-      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, team_id = ?, assigned_to = ?, recurrence_type = ? 
+      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, completed_at = ?, team_id = ?, assigned_to = ?, recurrence_type = ? 
       WHERE id = ?
     `).run(
       list_id !== undefined ? list_id : current.list_id,
@@ -614,6 +623,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       end_time !== undefined ? end_time : current.end_time,
       priority !== undefined ? priority : current.priority,
       is_completed !== undefined ? is_completed : current.is_completed,
+      completedAt,
       team_id !== undefined ? team_id : current.team_id,
       assigned_to !== undefined ? assigned_to : current.assigned_to,
       recurrence_type !== undefined ? recurrence_type : current.recurrence_type,
@@ -688,10 +698,20 @@ app.put('/api/subtasks/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    await db.prepare('UPDATE subtasks SET title = ?, description = ?, is_completed = ?, due_date = ?, start_time = ?, end_time = ? WHERE id = ?').run(
+    let completedAt = current.completed_at;
+    if (is_completed !== undefined) {
+      if (!!is_completed && !current.is_completed) {
+        completedAt = new Date().toISOString();
+      } else if (!is_completed) {
+        completedAt = null;
+      }
+    }
+
+    await db.prepare('UPDATE subtasks SET title = ?, description = ?, is_completed = ?, completed_at = ?, due_date = ?, start_time = ?, end_time = ? WHERE id = ?').run(
       title !== undefined ? title : current.title,
       description !== undefined ? description : current.description,
       is_completed !== undefined ? is_completed : current.is_completed,
+      completedAt,
       due_date !== undefined ? due_date : current.due_date,
       start_time !== undefined ? start_time : current.start_time,
       end_time !== undefined ? end_time : current.end_time,
