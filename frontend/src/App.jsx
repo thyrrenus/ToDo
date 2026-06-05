@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { GlobalSidebar } from './components/GlobalSidebar';
 import { Sidebar } from './components/Sidebar';
@@ -480,7 +481,16 @@ function App() {
               <span style={{ fontSize: '0.88rem' }}>Cargando vista...</span>
             </div>
           }>
-          {mainView === 'tasks' ? (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={mainView}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
+              >
+                {mainView === 'tasks' ? (
             <>
               <header className="header ticktick-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1070,18 +1080,29 @@ function App() {
               onRefreshTasks={fetchTasks}
             />
           )}
+              </motion.div>
+            </AnimatePresence>
           </Suspense>
         </main>
 
-        {(selectedTask || selectedSubtask) && (
-          <aside className="right-pane" style={{ width: `${rightPaneWidth}px`, position: 'relative' }}>
-            <div 
-              className="pane-resize-handle"
-              onMouseDown={startResizing}
-            />
-            <TaskDetail />
-          </aside>
-        )}
+        <AnimatePresence>
+          {(selectedTask || selectedSubtask) && (
+            <motion.aside
+              className="right-pane"
+              style={{ width: `${rightPaneWidth}px`, position: 'relative' }}
+              initial={{ x: '100%', opacity: 0.8 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0.8 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              <div 
+                className="pane-resize-handle"
+                onMouseDown={startResizing}
+              />
+              <TaskDetail />
+            </motion.aside>
+          )}
+        </AnimatePresence>
         {needRefresh && (
           <div style={{
             position: 'fixed',
