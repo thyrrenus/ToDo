@@ -208,6 +208,28 @@ const initDb = async () => {
      ALTER TABLE users ADD COLUMN outlook_ical_url TEXT;
    `);
 
+  // Create Indexes for performance optimization on foreign keys
+  await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_section_id ON tasks(section_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_team_id ON tasks(team_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);
+    CREATE INDEX IF NOT EXISTS idx_sections_list_id ON sections(list_id);
+    CREATE INDEX IF NOT EXISTS idx_sections_user_id ON sections(user_id);
+    CREATE INDEX IF NOT EXISTS idx_lists_user_id ON lists(user_id);
+    CREATE INDEX IF NOT EXISTS idx_lists_group_id ON lists(group_id);
+    CREATE INDEX IF NOT EXISTS idx_list_groups_user_id ON list_groups(user_id);
+    CREATE INDEX IF NOT EXISTS idx_team_members_team_id ON team_members(team_id);
+    CREATE INDEX IF NOT EXISTS idx_team_members_user_id ON team_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_friends_user_id ON friends(user_id);
+    CREATE INDEX IF NOT EXISTS idx_friends_friend_id ON friends(friend_id);
+    CREATE INDEX IF NOT EXISTS idx_tags_user_id ON tags(user_id);
+    CREATE INDEX IF NOT EXISTS idx_task_tags_task_id ON task_tags(task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_tags_tag_id ON task_tags(tag_id);
+  `);
+
   // 3. Ensure a default list if empty
   try {
     const countRes = await db.prepare('SELECT COUNT(*) as count FROM lists').get();

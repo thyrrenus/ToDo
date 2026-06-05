@@ -446,10 +446,26 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
       WHERE t.user_id = ?
     `).all(req.user.id);
 
-    // Group subtasks and tags by task_id
+    // Group subtasks and tags by task_id in O(N + M) using Maps
+    const subtasksByTaskId = new Map();
+    for (const st of subtasks) {
+      if (!subtasksByTaskId.has(st.task_id)) {
+        subtasksByTaskId.set(st.task_id, []);
+      }
+      subtasksByTaskId.get(st.task_id).push(st);
+    }
+
+    const tagsByTaskId = new Map();
+    for (const tt of taskTags) {
+      if (!tagsByTaskId.has(tt.task_id)) {
+        tagsByTaskId.set(tt.task_id, []);
+      }
+      tagsByTaskId.get(tt.task_id).push({ id: tt.tag_id, name: tt.name, color: tt.color });
+    }
+
     const tasksWithSubtasks = tasks.map(task => {
-      task.subtasks = subtasks.filter(st => st.task_id === task.id);
-      task.tags = taskTags.filter(tt => tt.task_id === task.id).map(tt => ({ id: tt.tag_id, name: tt.name, color: tt.color }));
+      task.subtasks = subtasksByTaskId.get(task.id) || [];
+      task.tags = tagsByTaskId.get(task.id) || [];
       return task;
     });
     
