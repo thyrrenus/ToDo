@@ -96,8 +96,6 @@ function App() {
     listeningSource,
     isReadingAgenda,
     isOffline,
-    offlineSimulated,
-    toggleOfflineSimulation,
     pendingSyncCount,
     activeRequests,
     syncingTaskIds,
@@ -1339,42 +1337,6 @@ function App() {
           </div>
         )}
 
-        {/* Dev Offline Simulation Toggle */}
-        {import.meta.env.DEV && (
-          <button
-            id="simular-offline-btn"
-            onClick={toggleOfflineSimulation}
-            style={{
-              position: 'fixed',
-              bottom: '24px',
-              right: '24px',
-              backgroundColor: offlineSimulated ? 'rgba(239, 68, 68, 0.2)' : 'rgba(28, 28, 30, 0.8)',
-              color: '#ffffff',
-              border: offlineSimulated ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '20px',
-              padding: '8px 14px',
-              boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              zIndex: 99999,
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              transition: 'all 0.2s ease',
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: offlineSimulated ? '#ef4444' : '#10b981',
-              display: 'inline-block'
-            }} />
-            {offlineSimulated ? 'Desactivar Offline' : 'Simular Offline'}
-          </button>
-        )}
       </div>
     </div>
   );

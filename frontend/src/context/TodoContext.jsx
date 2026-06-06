@@ -320,26 +320,7 @@ export function TodoProvider({ children }) {
   const [activeRequests, setActiveRequests] = useState(0);
 
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [offlineSimulated, setOfflineSimulated] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
-
-  const toggleOfflineSimulation = () => {
-    const nextState = !offlineSimulated;
-    setOfflineSimulated(nextState);
-    if (nextState) {
-      Object.defineProperty(navigator, 'onLine', {
-        get: () => false,
-        configurable: true
-      });
-      window.dispatchEvent(new Event('offline'));
-    } else {
-      Object.defineProperty(navigator, 'onLine', {
-        get: () => true,
-        configurable: true
-      });
-      window.dispatchEvent(new Event('online'));
-    }
-  };
 
   const updatePendingSyncCount = async () => {
     try {
@@ -1538,8 +1519,6 @@ export function TodoProvider({ children }) {
       activeRequests,
       setActiveRequests,
       isOffline,
-      offlineSimulated,
-      toggleOfflineSimulation,
       pendingSyncCount,
       syncingTaskIds,
       externalEvents,
