@@ -1211,15 +1211,18 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.ql-container.ql-bubble {
+.ql-container.ql-bubble,
+.ProseMirror {
   color: var(--text-primary);
   font-family: var(--font-family) !important;
   font-size: 0.9rem !important;
   min-height: 40px;
   overflow: visible !important;
+  outline: none;
 }
 
-.rich-text-editor-container .ql-editor {
+.rich-text-editor-container .ql-editor,
+.rich-text-editor-container .ProseMirror {
   padding: 0.25rem 0.5rem 0.5rem 0 !important;
   height: auto;
   overflow-y: auto !important;
@@ -1233,6 +1236,15 @@ input:checked + .slider:before {
   color: var(--text-secondary) !important;
   font-style: italic;
   left: 0 !important;
+}
+
+.ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-secondary);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
 }
 
 /* Tooltip (Bubble Menu) Dark Mode */
@@ -2295,7 +2307,8 @@ input:checked + .slider:before {
 }
 
 /* Blockquote styled as Callout Banner */
-.ql-container .ql-editor blockquote {
+.ql-container .ql-editor blockquote,
+.ProseMirror blockquote {
   border-left: 4px solid var(--accent-hover);
   background: rgba(124, 58, 237, 0.05);
   padding: 10px 14px;
@@ -2308,13 +2321,15 @@ input:checked + .slider:before {
   gap: 8px;
 }
 
-.ql-container .ql-editor blockquote::before {
+.ql-container .ql-editor blockquote::before,
+.ProseMirror blockquote::before {
   content: "💡";
   font-size: 1.05rem;
 }
 
 /* Task reference link pills */
-.ql-container .ql-editor a[href^="/tasks/"] {
+.ql-container .ql-editor a[href^="/tasks/"],
+.ProseMirror a[href^="/tasks/"] {
   background: rgba(124, 58, 237, 0.1);
   color: var(--accent-hover) !important;
   padding: 2px 6px;
@@ -2328,7 +2343,8 @@ input:checked + .slider:before {
   transition: all 0.15s ease;
 }
 
-.ql-container .ql-editor a[href^="/tasks/"]:hover {
+.ql-container .ql-editor a[href^="/tasks/"]:hover,
+.ProseMirror a[href^="/tasks/"]:hover {
   background: var(--accent-hover);
   color: #ffffff !important;
 }
@@ -2364,7 +2380,8 @@ input:checked + .slider:before {
 }
 
 /* Collapsible details accordion styling */
-.ql-container .ql-editor details {
+.ql-container .ql-editor details,
+.ProseMirror details {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 6px;
@@ -2373,12 +2390,14 @@ input:checked + .slider:before {
   transition: all 0.2s ease;
 }
 
-.ql-container .ql-editor details:hover {
+.ql-container .ql-editor details:hover,
+.ProseMirror details:hover {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
 }
 
-.ql-container .ql-editor details summary {
+.ql-container .ql-editor details summary,
+.ProseMirror details summary {
   font-weight: 600;
   font-size: 0.85rem;
   color: var(--text-primary);
@@ -2393,12 +2412,14 @@ input:checked + .slider:before {
 }
 
 /* Hide native summary marker in safari/chrome */
-.ql-container .ql-editor details summary::-webkit-details-marker {
+.ql-container .ql-editor details summary::-webkit-details-marker,
+.ProseMirror details summary::-webkit-details-marker {
   display: none;
 }
 
 /* Custom triangle marker icon */
-.ql-container .ql-editor details summary::before {
+.ql-container .ql-editor details summary::before,
+.ProseMirror details summary::before {
   content: "▶";
   font-size: 0.65rem;
   color: var(--text-muted);
@@ -2406,12 +2427,14 @@ input:checked + .slider:before {
   display: inline-block;
 }
 
-.ql-container .ql-editor details[open] summary::before {
+.ql-container .ql-editor details[open] summary::before,
+.ProseMirror details[open] summary::before {
   transform: rotate(90deg);
   color: var(--accent-hover);
 }
 
-.ql-container .ql-editor details p {
+.ql-container .ql-editor details p,
+.ProseMirror details p {
   margin: 8px 0 0 16px !important;
   color: var(--text-secondary);
   font-size: 0.85rem;
@@ -2430,7 +2453,8 @@ input:checked + .slider:before {
 
 /* Table Styles inside Rich Text Editor */
 .ql-container .ql-editor table,
-.ql-editor table {
+.ql-editor table,
+.ProseMirror table {
   border-collapse: collapse;
   width: 100%;
   margin: 1rem 0;
@@ -2444,7 +2468,9 @@ input:checked + .slider:before {
 .ql-container .ql-editor th,
 .ql-container .ql-editor td,
 .ql-editor th,
-.ql-editor td {
+.ql-editor td,
+.ProseMirror th,
+.ProseMirror td {
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 8px 12px;
   color: var(--text-secondary);
@@ -2452,7 +2478,8 @@ input:checked + .slider:before {
 }
 
 .ql-container .ql-editor th,
-.ql-editor th {
+.ql-editor th,
+.ProseMirror th {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
   font-weight: 600;
@@ -2460,16 +2487,80 @@ input:checked + .slider:before {
 }
 
 .ql-container .ql-editor tr:hover,
-.ql-editor tr:hover {
+.ql-editor tr:hover,
+.ProseMirror tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
 
 .ql-container .ql-editor td.selected,
 .ql-container .ql-editor th.selected,
 .ql-editor td.selected,
-.ql-editor th.selected {
+.ql-editor th.selected,
+.ProseMirror td.selected,
+.ProseMirror th.selected {
   background: rgba(var(--accent-rgb), 0.15);
   border: 1px solid var(--accent-hover);
+}
+
+/* Tiptap Task List Styles */
+ul[data-type="taskList"] {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 4px 0 !important;
+}
+
+ul[data-type="taskList"] li {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 0.5rem !important;
+  margin: 6px 0 !important;
+}
+
+ul[data-type="taskList"] li > label {
+  user-select: none !important;
+  margin-top: 3px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+ul[data-type="taskList"] li > label input[type="checkbox"] {
+  cursor: pointer !important;
+  appearance: none !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 4px !important;
+  display: grid !important;
+  place-content: center !important;
+  transition: all 0.15s ease !important;
+  margin: 0 !important;
+}
+
+ul[data-type="taskList"] li > label input[type="checkbox"]:hover {
+  border-color: var(--accent-hover) !important;
+  background-color: rgba(124, 58, 237, 0.1) !important;
+}
+
+ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background-color: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+}
+
+ul[data-type="taskList"] li > label input[type="checkbox"]:checked::before {
+  content: "✓" !important;
+  color: white !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+}
+
+ul[data-type="taskList"] li > div {
+  flex: 1 !important;
+}
+
+ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through !important;
+  color: var(--text-muted) !important;
 }
 
 /* Syncing Global Floating Indicator */
@@ -2756,3 +2847,263 @@ input:checked + .slider:before {
   }
 }
 
+
+
+/* Tiptap Notion Redesign Styles */
+
+/* Empty line plus button on the left margin */
+.editor-empty-line-plus-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.rich-text-editor-container:hover .editor-empty-line-plus-btn,
+.editor-empty-line-plus-btn:hover {
+  opacity: 0.6;
+}
+
+.editor-empty-line-plus-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+  opacity: 1 !important;
+  transform: scale(1.1);
+}
+
+/* Categorized slash menu styles */
+.slash-menu-category-header {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  padding: 8px 10px 4px 10px;
+  user-select: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.slash-commands-menu div:first-child > .slash-menu-category-header {
+  border-top: none;
+}
+
+/* Color and Highlight Pickers inside BubbleMenu */
+.editor-color-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #202024;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 10009;
+  min-width: 150px;
+  padding: 4px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.editor-color-dropdown-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: 6px 8px;
+  user-select: none;
+}
+
+.editor-color-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.editor-color-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.color-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Accordion guidelink styles on details open */
+.ProseMirror details[open] {
+  border-left: 2px solid var(--accent-hover) !important;
+  border-radius: 0 6px 6px 0 !important;
+  padding-left: 14px !important;
+}
+
+/* Premium Code Block Wrapper */
+.ProseMirror .code-block-wrapper {
+  position: relative;
+  background: #1e1e2e; /* Dracula/Catppuccin dark tone */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  margin: 16px 0;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace;
+}
+
+/* Code block controls header */
+.ProseMirror .code-block-controls {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+}
+
+.ProseMirror .code-block-wrapper:hover .code-block-controls {
+  opacity: 1;
+}
+
+/* Dropdown and Button Glassmorphism Styling */
+.ProseMirror .code-block-lang-select,
+.ProseMirror .code-block-copy-btn {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.ProseMirror .code-block-lang-select:hover,
+.ProseMirror .code-block-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ProseMirror .code-block-lang-select option {
+  background: #1e1e2e;
+  color: #fff;
+}
+
+.ProseMirror .code-block-wrapper pre {
+  margin: 0;
+  padding: 40px 16px 16px 16px !important; /* Top padding leaves space for controls */
+  background: transparent !important;
+  border: none !important;
+  overflow-x: auto;
+}
+
+.ProseMirror .code-block-wrapper code {
+  background: transparent !important;
+  padding: 0 !important;
+  color: #cdd6f4;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  display: block;
+}
+
+/* Custom Scrollbar for Code Blocks */
+.ProseMirror .code-block-wrapper pre::-webkit-scrollbar {
+  height: 6px;
+}
+.ProseMirror .code-block-wrapper pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ProseMirror .code-block-wrapper pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.ProseMirror .code-block-wrapper pre::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Syntax Highlighting Colors (Highlight.js / Dracula scheme) */
+.hljs-comment,
+.hljs-quote {
+  color: #6272a4;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: #ff79c6; /* Pink */
+  font-weight: bold;
+}
+
+.hljs-string,
+.hljs-doctag,
+.hljs-regexp {
+  color: #f1fa8c; /* Yellow */
+}
+
+.hljs-number,
+.hljs-template-variable,
+.hljs-variable,
+.hljs-type,
+.hljs-selector-id,
+.hljs-class .hljs-title {
+  color: #ffb86c; /* Orange */
+}
+
+.hljs-title,
+.hljs-name,
+.hljs-selector-class,
+.hljs-builtin-name {
+  color: #50fa7b; /* Green */
+}
+
+.hljs-function,
+.hljs-meta,
+.hljs-attr,
+.hljs-attribute {
+  color: #8be9fd; /* Cyan */
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-subst {
+  color: #f8f8f2;
+}
+
+.hljs-addition {
+  background-color: rgba(80, 250, 123, 0.2);
+}
+
+.hljs-deletion {
+  background-color: rgba(255, 85, 85, 0.2);
+}

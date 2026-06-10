@@ -294,7 +294,7 @@ export function TaskDetail() {
       lastItemIdRef.current = itemId;
     } else {
       const isTitleFocused = document.activeElement && document.activeElement.classList.contains('detail-title-input');
-      const isDescFocused = document.activeElement && document.activeElement.classList.contains('ql-editor');
+      const isDescFocused = document.activeElement && (document.activeElement.classList.contains('ql-editor') || document.activeElement.classList.contains('ProseMirror'));
       if (!isTitleFocused) {
         setTitle(item?.title || '');
       }

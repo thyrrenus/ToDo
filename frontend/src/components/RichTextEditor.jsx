@@ -1,35 +1,174 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
-import Quill from 'quill';
-import 'quill/dist/quill.bubble.css';
+import { useEditor, EditorContent, NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import { TableKit } from '@tiptap/extension-table';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import Placeholder from '@tiptap/extension-placeholder';
+import { TextStyle } from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import { Highlight } from '@tiptap/extension-highlight';
+import { Node } from '@tiptap/core';
 
-const Block = Quill.import('blots/block');
-const Container = Quill.import('blots/container');
+// Code block syntax highlighting imports
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
+import { createLowlight } from 'lowlight';
+import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
+import css from 'highlight.js/lib/languages/css';
+import xml from 'highlight.js/lib/languages/xml';
+import python from 'highlight.js/lib/languages/python';
+import sql from 'highlight.js/lib/languages/sql';
+import json from 'highlight.js/lib/languages/json';
+import markdown from 'highlight.js/lib/languages/markdown';
+import bash from 'highlight.js/lib/languages/bash';
 
-class SummaryBlot extends Block {
-  static blotName = 'summary';
-  static tagName = 'summary';
+const lowlight = createLowlight();
+lowlight.register('javascript', javascript);
+lowlight.register('js', javascript);
+lowlight.register('typescript', typescript);
+lowlight.register('ts', typescript);
+lowlight.register('css', css);
+lowlight.register('html', xml);
+lowlight.register('xml', xml);
+lowlight.register('python', python);
+lowlight.register('py', python);
+lowlight.register('sql', sql);
+lowlight.register('json', json);
+lowlight.register('markdown', markdown);
+lowlight.register('md', markdown);
+lowlight.register('bash', bash);
+lowlight.register('sh', bash);
+lowlight.register('shell', bash);
+
+const DetailsNode = Node.create({
+  name: 'details',
+  group: 'block',
+  content: 'summary block*',
+  defining: true,
+  addAttributes() {
+    return {
+      open: {
+        default: false,
+        parseHTML: element => element.hasAttribute('open'),
+        renderHTML: attributes => {
+          if (attributes.open) {
+            return { open: '' };
+          }
+          return {};
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'details' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['details', HTMLAttributes, 0];
+  },
+});
+
+// Custom Summary Node for Tiptap
+const SummaryNode = Node.create({
+  name: 'summary',
+  content: 'inline*',
+  defining: true,
+  parseHTML() {
+    return [{ tag: 'summary' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['summary', HTMLAttributes, 0];
+  },
+});
+
+// Custom Image Node for Tiptap
+const ImageNode = Node.create({
+  name: 'image',
+  group: 'block',
+  selectable: true,
+  draggable: true,
+  atom: true,
+  addAttributes() {
+    return {
+      src: { default: null },
+      alt: { default: null },
+      title: { default: null },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'img[src]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['img', HTMLAttributes];
+  },
+});
+
+// Custom React component for the code block NodeView
+export function CodeBlockComponent({ node, updateAttributes }) {
+  const [copied, setCopied] = useState(false);
+  const languages = ['auto', 'javascript', 'typescript', 'html', 'css', 'python', 'sql', 'json', 'markdown', 'bash'];
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(node.textContent || '');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
+    }
+  };
+
+  return (
+    <NodeViewWrapper className="code-block-wrapper" style={{ position: 'relative' }}>
+      <div className="code-block-controls" contentEditable={false} style={{ userSelect: 'none' }}>
+        <select
+          className="code-block-lang-select"
+          value={node.attrs.language || 'auto'}
+          onChange={e => updateAttributes({ language: e.target.value })}
+        >
+          {languages.map(lang => (
+            <option key={lang} value={lang}>
+              {lang}
+            </option>
+          ))}
+        </select>
+        <button className="code-block-copy-btn" onClick={copyToClipboard}>
+          {copied ? '✅ ¡Copiado!' : '📋 Copiar'}
+        </button>
+      </div>
+      <pre>
+        <NodeViewContent as="code" />
+      </pre>
+    </NodeViewWrapper>
+  );
 }
-Quill.register(SummaryBlot);
 
-class DetailsBlot extends Container {
-  static blotName = 'details';
-  static tagName = 'details';
-}
-DetailsBlot.defaultChild = 'block';
-DetailsBlot.allowedChildren = [SummaryBlot, Block];
-Quill.register(DetailsBlot);
+const CustomCodeBlock = CodeBlockLowlight.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlockComponent);
+  },
+});
+
 
 const slashCommands = [
-  { key: 'h1', label: 'Título Grande', desc: 'Encabezado H1', format: 'header', value: 1, type: 'format' },
-  { key: 'h2', label: 'Título Mediano', desc: 'Encabezado H2', format: 'header', value: 2, type: 'format' },
-  { key: 'bullet', label: 'Lista con viñetas', desc: 'Lista simple', format: 'list', value: 'bullet', type: 'format' },
-  { key: 'ordered', label: 'Lista numerada', desc: 'Lista con números', format: 'list', value: 'ordered', type: 'format' },
-  { key: 'code', label: 'Bloque de código', desc: 'Texto monosegmentado', format: 'code-block', value: true, type: 'format' },
-  { key: 'callout', label: 'Caja destacada', desc: 'Contenedor sutil destacado', format: 'blockquote', value: true, type: 'format' },
-  { key: 'collapsible', label: 'Sección colapsable', desc: 'Acordeón de texto ocultable', type: 'action', action: 'collapsible' },
-  { key: 'table', label: 'Tabla', desc: 'Insertar tabla de 3x3', type: 'action', action: 'table' },
-  { key: 'divider', label: 'Línea divisora', desc: 'Línea horizontal sutil', type: 'action', action: 'divider' },
-  { key: 'clean', label: 'Limpiar formato', desc: 'Quita todo el formato', type: 'action', action: 'clean' }
+  { key: 'paragraph', label: 'Texto normal', desc: 'Párrafo de texto normal', category: 'Texto básico', type: 'format', format: 'paragraph' },
+  { key: 'h1', label: 'Título Grande', desc: 'Encabezado H1', category: 'Texto básico', format: 'header', value: 1, type: 'format' },
+  { key: 'h2', label: 'Título Mediano', desc: 'Encabezado H2', category: 'Texto básico', format: 'header', value: 2, type: 'format' },
+  { key: 'h3', label: 'Título Pequeño', desc: 'Encabezado H3', category: 'Texto básico', format: 'header', value: 3, type: 'format' },
+  
+  { key: 'taskList', label: 'Lista de tareas', desc: 'Checklist interactivo', category: 'Listas', format: 'list', value: 'taskList', type: 'format' },
+  { key: 'bullet', label: 'Lista con viñetas', desc: 'Lista simple', category: 'Listas', format: 'list', value: 'bullet', type: 'format' },
+  { key: 'ordered', label: 'Lista numerada', desc: 'Lista con números', category: 'Listas', format: 'list', value: 'ordered', type: 'format' },
+  
+  { key: 'collapsible', label: 'Sección colapsable', desc: 'Acordeón de texto ocultable', category: 'Avanzado', type: 'action', action: 'collapsible' },
+  { key: 'callout', label: 'Caja destacada', desc: 'Contenedor sutil destacado', category: 'Avanzado', format: 'blockquote', value: true, type: 'format' },
+  { key: 'table', label: 'Tabla', desc: 'Insertar tabla de 3x3', category: 'Avanzado', type: 'action', action: 'table' },
+  { key: 'image', label: 'Imagen', desc: 'Subir una imagen', category: 'Avanzado', type: 'action', action: 'image' },
+  { key: 'divider', label: 'Línea divisora', desc: 'Línea horizontal sutil', category: 'Avanzado', type: 'action', action: 'divider' },
+  { key: 'clean', label: 'Limpiar formato', desc: 'Quita todo el formato', category: 'Avanzado', type: 'action', action: 'clean' }
 ];
 
 const emojiList = [
@@ -50,10 +189,31 @@ const emojiList = [
   { char: '📅', key: 'calendar', label: 'calendar', desc: 'Calendario' }
 ];
 
+const textColors = [
+  { name: 'Predeterminado', value: null, color: 'var(--text-primary)' },
+  { name: 'Gris', value: '#8e95a5', color: '#8e95a5' },
+  { name: 'Rojo', value: '#ef4444', color: '#ef4444' },
+  { name: 'Naranja', value: '#f97316', color: '#f97316' },
+  { name: 'Amarillo', value: '#eab308', color: '#eab308' },
+  { name: 'Verde', value: '#22c55e', color: '#22c55e' },
+  { name: 'Azul', value: '#3b82f6', color: '#3b82f6' },
+  { name: 'Violeta', value: '#a855f7', color: '#a855f7' },
+  { name: 'Rosa', value: '#ec4899', color: '#ec4899' },
+];
+
+const highlightColors = [
+  { name: 'Predeterminado', value: null, color: 'transparent' },
+  { name: 'Resaltado Gris', value: 'rgba(142, 149, 165, 0.2)', color: 'rgba(142, 149, 165, 0.2)' },
+  { name: 'Resaltado Rojo', value: 'rgba(239, 68, 68, 0.2)', color: 'rgba(239, 68, 68, 0.2)' },
+  { name: 'Resaltado Naranja', value: 'rgba(249, 115, 22, 0.2)', color: 'rgba(249, 115, 22, 0.2)' },
+  { name: 'Resaltado Amarillo', value: 'rgba(234, 179, 8, 0.2)', color: 'rgba(234, 179, 8, 0.2)' },
+  { name: 'Resaltado Verde', value: 'rgba(34, 197, 94, 0.2)', color: 'rgba(34, 197, 94, 0.2)' },
+  { name: 'Resaltado Azul', value: 'rgba(59, 130, 246, 0.2)', color: 'rgba(59, 130, 246, 0.2)' },
+  { name: 'Resaltado Violeta', value: 'rgba(168, 85, 247, 0.2)', color: 'rgba(168, 85, 247, 0.2)' },
+  { name: 'Resaltado Rosa', value: 'rgba(236, 72, 153, 0.2)', color: 'rgba(236, 72, 153, 0.2)' },
+];
+
 export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCreateSubtask }) {
-  const containerRef = useRef(null);
-  const quillRef = useRef(null);
-  
   const [hoveredTable, setHoveredTable] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [colButtonPos, setColButtonPos] = useState({ top: 0, left: 0, visible: false });
@@ -61,10 +221,30 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   const [activeCell, setActiveCell] = useState(null);
   const [tableToolbarPos, setTableToolbarPos] = useState({ top: 0, left: 0, visible: false });
   const tableHoverTimeoutRef = useRef(null);
+
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const [showHashMenu, setShowHashMenu] = useState(false);
+  const [hashQuery, setHashQuery] = useState('');
+  const [hashMenuPosition, setHashMenuPosition] = useState({ top: 0, left: 0 });
+  const [hashSelectedIndex, setHashSelectedIndex] = useState(0);
+
+  const [showEmojiMenu, setShowEmojiMenu] = useState(false);
+  const [emojiQuery, setEmojiQuery] = useState('');
+  const [emojiMenuPosition, setEmojiMenuPosition] = useState({ top: 0, left: 0 });
+  const [emojiSelectedIndex, setEmojiSelectedIndex] = useState(0);
+
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+
+  const [showPlusButton, setShowPlusButton] = useState(false);
+  const [plusButtonPosition, setPlusButtonPosition] = useState({ top: 0 });
 
   // Refs for callbacks to prevent re-binding event listeners
   const onChangeRef = useRef(onChange);
@@ -80,63 +260,31 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
 
   const selectCell = (tdElement) => {
     if (!tdElement) return;
-    const quill = quillRef.current;
-    if (!quill) return;
-
     try {
-      const blot = Quill.find(tdElement);
-      if (blot) {
-        const index = blot.offset(quill.scroll);
-        quill.setSelection(index, 0, 'user');
-        quill.focus();
-      } else {
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(tdElement);
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        quill.focus();
-      }
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(tdElement);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      if (editor) editor.commands.focus();
     } catch (e) {
       console.error('Failed to select cell:', e);
     }
   };
 
   const addColumnAtHover = (tdElement) => {
-    if (!tdElement) return;
-    const quill = quillRef.current;
-    if (!quill) return;
-    const tableModule = quill.getModule('table');
-    if (!tableModule) return;
-
+    if (!tdElement || !editor) return;
     selectCell(tdElement);
-
-    try {
-      tableModule.insertColumnRight();
-    } catch (err) {
-      console.error('Failed to append col:', err);
-    }
-
+    editor.chain().focus().addColumnAfter().run();
     setColButtonPos(prev => ({ ...prev, visible: false }));
     setRowButtonPos(prev => ({ ...prev, visible: false }));
   };
 
   const addRowAtHover = (tdElement) => {
-    if (!tdElement) return;
-    const quill = quillRef.current;
-    if (!quill) return;
-    const tableModule = quill.getModule('table');
-    if (!tableModule) return;
-
+    if (!tdElement || !editor) return;
     selectCell(tdElement);
-
-    try {
-      tableModule.insertRowBelow();
-    } catch (err) {
-      console.error('Failed to append row:', err);
-    }
-
+    editor.chain().focus().addRowAfter().run();
     setColButtonPos(prev => ({ ...prev, visible: false }));
     setRowButtonPos(prev => ({ ...prev, visible: false }));
   };
@@ -157,7 +305,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     }, 300);
   };
 
-  const imageHandler = () => {
+  const triggerImageUpload = () => {
     const input = document.createElement('input');
     input.setAttribute('type', 'file');
     input.setAttribute('accept', 'image/*');
@@ -175,12 +323,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
             body: formData,
           });
           const data = await res.json();
-          if (data.url) {
-            const quill = quillRef.current;
-            if (quill) {
-              const range = quill.getSelection(true);
-              quill.insertEmbed(range.index, 'image', data.url);
-            }
+          if (data.url && editor) {
+            editor.chain().focus().insertContent(`<img src="${data.url}" alt="" />`).run();
           }
         } catch (err) {
           console.error('Image upload failed', err);
@@ -188,22 +332,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
     };
   };
-
-  const modules = useMemo(() => ({
-    toolbar: {
-      container: [
-        [{ 'header': [1, 2, 3, false] }],
-        ['bold', 'italic', 'underline', 'strike'],
-        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-        ['link', 'image'],
-        ['clean']
-      ],
-      handlers: {
-        image: imageHandler
-      }
-    },
-    table: true
-  }), []);
 
   const filteredOptions = useMemo(() => {
     if (!slashQuery) return slashCommands;
@@ -215,41 +343,6 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         cmd.desc.toLowerCase().includes(query)
     );
   }, [slashQuery]);
-
-  const [showHashMenu, setShowHashMenu] = useState(false);
-  const [hashQuery, setHashQuery] = useState('');
-  const [hashMenuPosition, setHashMenuPosition] = useState({ top: 0, left: 0 });
-  const [hashSelectedIndex, setHashSelectedIndex] = useState(0);
-
-  const [showEmojiMenu, setShowEmojiMenu] = useState(false);
-  const [emojiQuery, setEmojiQuery] = useState('');
-  const [emojiMenuPosition, setEmojiMenuPosition] = useState({ top: 0, left: 0 });
-  const [emojiSelectedIndex, setEmojiSelectedIndex] = useState(0);
-
-  const [showSelectionMenu, setShowSelectionMenu] = useState(false);
-  const [selectionMenuPosition, setSelectionMenuPosition] = useState({ top: 0, left: 0 });
-  const [selectedText, setSelectedText] = useState('');
-
-  const [showContextMenu, setShowContextMenu] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
-
-  // Close context menu on outside click or right-click
-  useEffect(() => {
-    const closeMenu = () => {
-      setShowContextMenu(false);
-    };
-    window.addEventListener('click', closeMenu);
-    window.addEventListener('contextmenu', closeMenu);
-    return () => {
-      window.removeEventListener('click', closeMenu);
-      window.removeEventListener('contextmenu', closeMenu);
-    };
-  }, []);
-
-  // Sync index boundary when options filter changes
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [filteredOptions]);
 
   const filteredTasks = useMemo(() => {
     if (!hashQuery) return tasks.slice(0, 10);
@@ -270,6 +363,10 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   }, [emojiQuery]);
 
   useEffect(() => {
+    setSelectedIndex(0);
+  }, [filteredOptions]);
+
+  useEffect(() => {
     setHashSelectedIndex(0);
   }, [filteredTasks]);
 
@@ -278,64 +375,47 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   }, [filteredEmojis]);
 
   const toggleFormat = (formatName) => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const currentFormats = quill.getFormat();
-    const isFormatActive = currentFormats[formatName];
-    quill.format(formatName, !isFormatActive);
+    if (!editor) return;
+    if (formatName === 'bold') editor.chain().focus().toggleBold().run();
+    if (formatName === 'italic') editor.chain().focus().toggleItalic().run();
+    if (formatName === 'underline') editor.chain().focus().toggleUnderline().run();
+    if (formatName === 'strike') editor.chain().focus().toggleStrike().run();
   };
 
   const toggleCodeBlock = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const currentFormats = quill.getFormat();
-    quill.format('code-block', !currentFormats['code-block']);
+    if (editor) editor.chain().focus().toggleCodeBlock().run();
   };
 
   const toggleBlockquote = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const currentFormats = quill.getFormat();
-    quill.format('blockquote', !currentFormats['blockquote']);
+    if (editor) editor.chain().focus().toggleBlockquote().run();
   };
 
   const insertCollapsible = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      quill.clipboard.dangerouslyPasteHTML(range.index, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido...</p></details>');
+    if (editor) {
+      editor.chain().focus().insertContent('<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido...</p></details>').run();
     }
   };
 
   const insertDivider = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      quill.insertText(range.index, '────────────────────────────────────────\n');
+    if (editor) {
+      editor.chain().focus().setHorizontalRule().run();
     }
   };
 
   const insertTable = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const tableModule = quill.getModule('table');
-    if (tableModule) {
-      tableModule.insertTable(3, 3);
+    if (editor) {
+      editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
     }
     setShowContextMenu(false);
   };
 
   const getSelectedCellElement = () => {
-    const quill = quillRef.current;
-    if (!quill) return null;
-    
+    if (!editor) return null;
     try {
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
         let node = selection.getRangeAt(0).startContainer;
-        while (node && node !== quill.root) {
+        while (node && node !== editor.view.dom) {
           if (node.nodeName === 'TD' || node.nodeName === 'TH') {
             return node;
           }
@@ -348,72 +428,31 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     return null;
   };
 
-  const getEditorContext = () => {
-    const quill = quillRef.current;
-    if (!quill) return null;
-
-    const range = quill.getSelection();
-    if (!range) return null;
-
-    const [line] = quill.getLine(range.index);
-    if (!line) return null;
-
-    const lineIndex = quill.getIndex(line);
-    const cursorOffset = range.index - lineIndex;
-    const lineLength = line.length();
-    const lineText = quill.getText(lineIndex, lineLength - 1);
-    const textBeforeCursor = lineText.slice(0, cursorOffset);
-
-    return { quill, range, line, lineIndex, cursorOffset, lineLength, lineText, textBeforeCursor };
-  };
-
   const getIsCursorInTable = () => {
     return !!getSelectedCellElement();
   };
 
   const handleTableAction = (action) => {
-    const quill = quillRef.current;
-    if (!quill) return;
-
-    const tableModule = quill.getModule('table');
-    if (!tableModule) return;
-
-    if (action === 'insertRowAbove') {
-      tableModule.insertRowAbove();
-    } else if (action === 'insertRowBelow') {
-      tableModule.insertRowBelow();
-    } else if (action === 'insertColumnLeft') {
-      tableModule.insertColumnLeft();
-    } else if (action === 'insertColumnRight') {
-      tableModule.insertColumnRight();
-    } else if (action === 'deleteRow') {
-      tableModule.deleteRow();
-    } else if (action === 'deleteColumn') {
-      tableModule.deleteColumn();
-    } else if (action === 'deleteTable') {
-      tableModule.deleteTable();
-    }
+    if (!editor) return;
+    if (action === 'insertRowAbove') editor.chain().focus().addRowBefore().run();
+    else if (action === 'insertRowBelow') editor.chain().focus().addRowAfter().run();
+    else if (action === 'insertColumnLeft') editor.chain().focus().addColumnBefore().run();
+    else if (action === 'insertColumnRight') editor.chain().focus().addColumnAfter().run();
+    else if (action === 'deleteRow') editor.chain().focus().deleteRow().run();
+    else if (action === 'deleteColumn') editor.chain().focus().deleteColumn().run();
+    else if (action === 'deleteTable') editor.chain().focus().deleteTable().run();
 
     setShowContextMenu(false);
   };
 
   const triggerMention = (char) => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    if (range) {
-      quill.insertText(range.index, char);
-      quill.setSelection(range.index + 1);
-      quill.focus();
+    if (editor) {
+      editor.chain().focus().insertContent(char).run();
     }
   };
 
   const copySelectionAsMarkdown = async () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const range = quill.getSelection();
-    if (!range || range.length === 0) return;
-
+    if (!editor) return;
     const nativeSelection = window.getSelection();
     if (nativeSelection && nativeSelection.rangeCount > 0) {
       const nativeRange = nativeSelection.getRangeAt(0);
@@ -431,17 +470,12 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const pasteMarkdownFromClipboard = async () => {
-    const quill = quillRef.current;
-    if (!quill) return;
+    if (!editor) return;
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
         const html = markdownToHtml(text);
-        const range = quill.getSelection(true);
-        if (range) {
-          quill.clipboard.dangerouslyPasteHTML(range.index, html);
-          quill.focus();
-        }
+        editor.chain().focus().insertContent(html).run();
       }
     } catch (err) {
       console.error('Failed to read clipboard', err);
@@ -449,47 +483,347 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const cleanFormatting = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-    const range = quill.getSelection();
-    if (range) {
-      quill.removeFormat(range.index, range.length);
+    if (editor) {
+      editor.chain().focus().unsetAllMarks().clearNodes().run();
     }
   };
 
-  // Main useEffect: Initializing Quill and binding all event listeners once
+  // Close context menu on outside click or right-click
   useEffect(() => {
-    if (!containerRef.current) return;
+    const closeMenu = () => {
+      setShowContextMenu(false);
+    };
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('contextmenu', closeMenu);
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('contextmenu', closeMenu);
+    };
+  }, []);
 
-    const editorDiv = document.createElement('div');
-    containerRef.current.appendChild(editorDiv);
+  const checkSuggestions = (editor) => {
+    const { state, view } = editor;
+    const { selection } = state;
+    const { $from, empty } = selection;
 
-    const quill = new Quill(editorDiv, {
-      theme: 'bubble',
-      placeholder: placeholder || 'Escribe aquí...',
-      modules: modules,
-      bounds: '.task-detail-content'
-    });
-
-    quillRef.current = quill;
-
-    if (value) {
-      quill.clipboard.dangerouslyPasteHTML(value);
+    if (!empty) {
+      setShowSlashMenu(false);
+      setShowHashMenu(false);
+      setShowEmojiMenu(false);
+      return;
     }
 
-    // 1. Handle text change callback to parent component
-    const handleTextChangeCallback = () => {
-      if (onChangeRef.current) {
-        onChangeRef.current(quill.root.innerHTML);
-      }
-    };
-    quill.on('text-change', handleTextChangeCallback);
+    const textBeforeCursor = $from.parent.textContent.slice(0, $from.parentOffset);
 
-    // 2. Event listeners for Table Add Hover Buttons
+    let coords;
+    try {
+      coords = view.coordsAtPos($from.pos);
+    } catch (e) {
+      coords = { top: 0, left: 0 };
+    }
+
+    const wrapper = view.dom.closest('.rich-text-editor-container');
+    if (!wrapper) return;
+    const wrapperRect = wrapper.getBoundingClientRect();
+
+    const menuPos = {
+      top: coords.bottom - wrapperRect.top + wrapper.scrollTop + 4,
+      left: coords.left - wrapperRect.left + wrapper.scrollLeft
+    };
+
+    // Slash command detector
+    const slashIndex = textBeforeCursor.lastIndexOf('/');
+    if (slashIndex !== -1) {
+      const charBeforeSlash = slashIndex > 0 ? textBeforeCursor[slashIndex - 1] : ' ';
+      if (charBeforeSlash === ' ' || charBeforeSlash === '\n') {
+        const query = textBeforeCursor.slice(slashIndex + 1);
+        if (!query.includes(' ')) {
+          setSlashQuery(query);
+          setMenuPosition(menuPos);
+          setShowSlashMenu(true);
+          setShowHashMenu(false);
+          setShowEmojiMenu(false);
+          return;
+        }
+      }
+    }
+    setShowSlashMenu(false);
+
+    // Hash detector
+    const hashIndex = textBeforeCursor.lastIndexOf('#');
+    if (hashIndex !== -1) {
+      const charBeforeHash = hashIndex > 0 ? textBeforeCursor[hashIndex - 1] : ' ';
+      if (charBeforeHash === ' ' || charBeforeHash === '\n') {
+        const query = textBeforeCursor.slice(hashIndex + 1);
+        if (!query.includes(' ')) {
+          setHashQuery(query);
+          setHashMenuPosition(menuPos);
+          setShowHashMenu(true);
+          setShowEmojiMenu(false);
+          return;
+        }
+      }
+    }
+    setShowHashMenu(false);
+
+    // Emoji detector
+    const colonIndex = textBeforeCursor.lastIndexOf(':');
+    if (colonIndex !== -1) {
+      const charBeforeColon = colonIndex > 0 ? textBeforeCursor[colonIndex - 1] : ' ';
+      if (charBeforeColon === ' ' || charBeforeColon === '\n') {
+        const query = textBeforeCursor.slice(colonIndex + 1);
+        if (!query.includes(' ') && query.length > 0) {
+          setEmojiQuery(query);
+          setEmojiMenuPosition(menuPos);
+          setShowEmojiMenu(true);
+          return;
+        }
+      }
+    }
+    setShowEmojiMenu(false);
+  };
+
+  const checkActiveCell = (editor) => {
+    setTimeout(() => {
+      const cell = getSelectedCellElement();
+      if (cell) {
+        setActiveCell(cell);
+        const wrapper = editor.view.dom.closest('.rich-text-editor-container');
+        if (wrapper) {
+          const cellRect = cell.getBoundingClientRect();
+          const wrapperRect = wrapper.getBoundingClientRect();
+          
+          const left = cellRect.left - wrapperRect.left + wrapper.scrollLeft + (cellRect.width / 2) - 130;
+          const top = cellRect.top - wrapperRect.top + wrapper.scrollTop - 42;
+          
+          setTableToolbarPos({
+            left: Math.max(8, left),
+            top: top > 0 ? top : cellRect.bottom - wrapperRect.top + wrapper.scrollTop + 8,
+            visible: true
+          });
+        }
+      } else {
+        setActiveCell(null);
+        setTableToolbarPos(prev => ({ ...prev, visible: false }));
+      }
+    }, 0);
+  };
+
+  const checkEmptyLinePlusButton = (editor) => {
+    const { state, view } = editor;
+    const { selection } = state;
+    const { $from, empty } = selection;
+
+    if (!empty) {
+      setShowPlusButton(false);
+      return;
+    }
+
+    const isParagraph = $from.parent.type.name === 'paragraph';
+    const isEmpty = $from.parent.content.size === 0;
+
+    if (isParagraph && isEmpty) {
+      let coords;
+      try {
+        coords = view.coordsAtPos($from.pos);
+      } catch (e) {
+        coords = { top: 0, left: 0 };
+      }
+
+      const wrapper = view.dom.closest('.rich-text-editor-container');
+      if (wrapper) {
+        const wrapperRect = wrapper.getBoundingClientRect();
+        setPlusButtonPosition({
+          top: coords.top - wrapperRect.top + wrapper.scrollTop + 2,
+        });
+        setShowPlusButton(true);
+      }
+    } else {
+      setShowPlusButton(false);
+    }
+  };
+
+  const handlePlusButtonClick = () => {
+    if (!editor) return;
+    editor.chain().focus().insertContent('/').run();
+  };
+
+  // Initialize Tiptap Editor
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        codeBlock: false,
+      }),
+      CustomCodeBlock.configure({
+        lowlight,
+      }),
+      Underline,
+      Link.configure({
+        openOnClick: false,
+      }),
+      TableKit.configure({
+        table: {
+          resizable: true,
+        },
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      Placeholder.configure({
+        placeholder: ({ node }) => {
+          if (node.type.name === 'heading') {
+            return 'Título';
+          }
+          return placeholder || "Escribe '/' para comandos...";
+        }
+      }),
+      TextStyle,
+      Color,
+      Highlight.configure({
+        multicolor: true,
+      }),
+      DetailsNode,
+      SummaryNode,
+      ImageNode,
+    ],
+    content: value || '',
+    editorProps: {
+      handleClick(view, pos, event) {
+        console.log('editorProps.handleClick target:', event.target.tagName);
+        const summary = event.target.closest('summary');
+        if (summary) {
+          const rect = summary.getBoundingClientRect();
+          const isArrowClick = (event.clientX - rect.left) < 28;
+          console.log('editorProps.handleClick isArrowClick:', isArrowClick, 'clientX:', event.clientX, 'rectLeft:', rect.left);
+          if (isArrowClick) {
+            const details = summary.parentNode;
+            if (details && details.tagName.toLowerCase() === 'details') {
+              try {
+                const innerPos = view.posAtDOM(details, 0);
+                if (innerPos !== null) {
+                  const $pos = view.state.doc.resolve(innerPos);
+                  let detailsPos = null;
+                  let detailsNode = null;
+                  
+                  for (let d = $pos.depth; d >= 0; d--) {
+                    const parentNode = $pos.node(d);
+                    if (parentNode && parentNode.type.name === 'details') {
+                      detailsPos = $pos.before(d);
+                      detailsNode = parentNode;
+                      break;
+                    }
+                  }
+
+                  console.log('editorProps.handleClick resolved detailsPos:', detailsPos, 'node name:', detailsNode ? detailsNode.type.name : 'null');
+                  
+                  if (detailsPos !== null && detailsNode) {
+                    const newOpen = !detailsNode.attrs.open;
+                    view.dispatch(
+                      view.state.tr.setNodeMarkup(detailsPos, null, {
+                        ...detailsNode.attrs,
+                        open: newOpen
+                      })
+                    );
+                    view.focus();
+                  }
+                }
+              } catch (err) {
+                console.error('Failed to sync details state:', err);
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              return true; // stop Prosemirror handling
+            }
+          }
+        }
+        return false;
+      }
+    },
+    onUpdate({ editor }) {
+      const html = editor.getHTML();
+      console.log('onUpdate html:', html);
+      if (onChangeRef.current) {
+        onChangeRef.current(html);
+      }
+
+      const { state } = editor;
+      const { selection } = state;
+      const { $from } = selection;
+      const textBeforeCursor = $from.parent.textContent.slice(0, $from.parentOffset);
+
+      // custom rule for details section '>>> '
+      if (textBeforeCursor.endsWith('>>> ')) {
+        const start = $from.pos - 4;
+        editor.chain().focus()
+          .deleteRange({ from: start, to: $from.pos })
+          .insertContent('<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>')
+          .run();
+      }
+
+      // custom rule for divider '--- ' / '*** '
+      if (textBeforeCursor.endsWith('--- ') || textBeforeCursor.endsWith('*** ')) {
+        const start = $from.pos - 4;
+        editor.chain().focus()
+          .deleteRange({ from: start, to: $from.pos })
+          .setHorizontalRule()
+          .run();
+      }
+
+      // custom rule for blockquote '"" '
+      if (textBeforeCursor.endsWith('"" ')) {
+        const start = $from.pos - 3;
+        editor.chain().focus()
+          .deleteRange({ from: start, to: $from.pos })
+          .toggleBlockquote()
+          .run();
+      }
+
+      // autocompletion of emoji
+      const match = /:([a-z0-9_]+):$/.exec(textBeforeCursor);
+      if (match) {
+        const emojiKey = match[1];
+        const emojiFound = emojiList.find(e => e.key === emojiKey);
+        if (emojiFound) {
+          const start = $from.pos - (emojiKey.length + 2);
+          editor.chain().focus()
+            .deleteRange({ from: start, to: $from.pos })
+            .insertContent(emojiFound.char + ' ')
+            .run();
+        }
+      }
+
+      checkSuggestions(editor);
+      checkEmptyLinePlusButton(editor);
+    },
+    onSelectionUpdate({ editor }) {
+      checkSuggestions(editor);
+      checkActiveCell(editor);
+      checkEmptyLinePlusButton(editor);
+      setShowColorPicker(false);
+      setShowHighlightPicker(false);
+    },
+  });
+
+  // Sync value changes from parent without losing cursor position
+  useEffect(() => {
+    if (editor && value !== undefined) {
+      const currentHtml = editor.getHTML();
+      if (value !== currentHtml) {
+        editor.commands.setContent(value || '');
+      }
+    }
+  }, [value, editor]);
+
+  // Bind mouse move and context menu events to Tiptap view DOM
+  useEffect(() => {
+    if (!editor) return;
+    const viewDom = editor.view.dom;
+
     const handleMouseMove = (e) => {
       const cell = e.target.closest('td, th');
       const table = e.target.closest('table');
-      const wrapper = quill.root.closest('.rich-text-editor-container');
+      const wrapper = viewDom.closest('.rich-text-editor-container');
       
       if (cell && table && wrapper) {
         if (tableHoverTimeoutRef.current) {
@@ -540,16 +874,10 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
     };
 
-    quill.root.addEventListener('mousemove', handleMouseMove);
-    quill.root.addEventListener('mouseleave', handleMouseLeave);
-    window.addEventListener('scroll', handleMouseLeave, true);
-
-    // 3. Custom Right-Click Context Menu Listener
     const handleNativeContextMenu = (e) => {
-      const wrapper = quill.root.closest('.rich-text-editor-container');
+      const wrapper = viewDom.closest('.rich-text-editor-container');
       if (!wrapper) return;
 
-      // Select clicked cell if right-clicked inside a table to ensure context menu actions apply to it
       const clickedCell = e.target.closest('td, th');
       if (clickedCell) {
         selectCell(clickedCell);
@@ -577,145 +905,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       setContextMenuPosition({ x, y });
       setShowContextMenu(true);
     };
-    quill.root.addEventListener('contextmenu', handleNativeContextMenu);
 
-    // 4. Slash (/), Hash (#), and Emoji (:) Menu Selection Change Trigger
-    const checkSlashCommand = () => {
-      const context = getEditorContext();
-      if (!context) {
-        setShowSlashMenu(false);
-        setShowHashMenu(false);
-        setShowEmojiMenu(false);
-        return;
-      }
-      const { range, textBeforeCursor } = context;
-
-      if (textBeforeCursor.startsWith('/')) {
-        const query = textBeforeCursor.slice(1);
-        setSlashQuery(query);
-        const bounds = quillRef.current.getBounds(range.index);
-        
-        setMenuPosition({
-          top: bounds.top + bounds.height + 4,
-          left: bounds.left
-        });
-        setShowSlashMenu(true);
-        setShowHashMenu(false);
-        setShowEmojiMenu(false);
-        return;
-      } else {
-        setShowSlashMenu(false);
-      }
-
-      const hashIndex = textBeforeCursor.lastIndexOf('#');
-      if (hashIndex !== -1) {
-        const charBeforeHash = hashIndex > 0 ? textBeforeCursor[hashIndex - 1] : ' ';
-        if (charBeforeHash === ' ' || charBeforeHash === '\n') {
-          const query = textBeforeCursor.slice(hashIndex + 1);
-          if (!query.includes(' ')) {
-            setHashQuery(query);
-            const bounds = quillRef.current.getBounds(range.index);
-            setHashMenuPosition({
-              top: bounds.top + bounds.height + 4,
-              left: bounds.left
-            });
-            setShowHashMenu(true);
-            setShowEmojiMenu(false);
-            return;
-          }
-        }
-      }
-      setShowHashMenu(false);
-
-      const colonIndex = textBeforeCursor.lastIndexOf(':');
-      if (colonIndex !== -1) {
-        const charBeforeColon = colonIndex > 0 ? textBeforeCursor[colonIndex - 1] : ' ';
-        if (charBeforeColon === ' ' || charBeforeColon === '\n') {
-          const query = textBeforeCursor.slice(colonIndex + 1);
-          if (!query.includes(' ') && query.length > 0) {
-            setEmojiQuery(query);
-            const bounds = quillRef.current.getBounds(range.index);
-            setEmojiMenuPosition({
-              top: bounds.top + bounds.height + 4,
-              left: bounds.left
-            });
-            setShowEmojiMenu(true);
-            return;
-          }
-        }
-      }
-      setShowEmojiMenu(false);
-    };
-    const checkActiveCell = () => {
-      setTimeout(() => {
-        const cell = getSelectedCellElement();
-        if (cell) {
-          setActiveCell(cell);
-          const wrapper = quill.root.closest('.rich-text-editor-container');
-          if (wrapper) {
-            const cellRect = cell.getBoundingClientRect();
-            const wrapperRect = wrapper.getBoundingClientRect();
-            
-            // Position above active cell
-            const left = cellRect.left - wrapperRect.left + wrapper.scrollLeft + (cellRect.width / 2) - 130;
-            const top = cellRect.top - wrapperRect.top + wrapper.scrollTop - 42;
-            
-            setTableToolbarPos({
-              left: Math.max(8, left),
-              top: top > 0 ? top : cellRect.bottom - wrapperRect.top + wrapper.scrollTop + 8,
-              visible: true
-            });
-          }
-        } else {
-          setActiveCell(null);
-          setTableToolbarPos(prev => ({ ...prev, visible: false }));
-        }
-      }, 0);
-    };
-
-    quill.on('selection-change', checkSlashCommand);
-    quill.on('text-change', checkSlashCommand);
-    quill.on('selection-change', checkActiveCell);
-    quill.on('text-change', checkActiveCell);
-
-    // 5. User Input Real-time Markdown Auto-conversion
-    const handleTextChangeMarkdown = (delta, oldDelta, source) => {
-      if (source !== 'user') return;
-
-      const context = getEditorContext();
-      if (!context) return;
-      const { quill, lineIndex, cursorOffset, textBeforeCursor } = context;
-
-      if (textBeforeCursor.endsWith(' ')) {
-        const trimmed = textBeforeCursor.slice(0, -1);
-        
-        if (trimmed === '#') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.formatLine(lineIndex, 1, 'header', 1);
-        } else if (trimmed === '##') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.formatLine(lineIndex, 1, 'header', 2);
-        } else if (trimmed === '###') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.formatLine(lineIndex, 1, 'header', 3);
-        } else if (trimmed === '*' || trimmed === '-') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.formatLine(lineIndex, 1, 'list', 'bullet');
-        } else if (trimmed === '1.') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.formatLine(lineIndex, 1, 'list', 'ordered');
-        } else if (trimmed === '```') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.formatLine(lineIndex, 1, 'code-block', true);
-        } else if (trimmed === '>>>') {
-          quill.deleteText(lineIndex, cursorOffset);
-          quill.clipboard.dangerouslyPasteHTML(lineIndex, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>');
-        }
-      }
-    };
-    quill.on('text-change', handleTextChangeMarkdown);
-
-    // 6. Paste/Copy handling for Markdown conversions
     const handlePaste = (e) => {
       const clipboardData = e.clipboardData || window.clipboardData;
       const pastedText = clipboardData.getData('text/plain');
@@ -732,17 +922,13 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       if (isMd) {
         e.preventDefault();
         const html = markdownToHtml(pastedText);
-        const range = quill.getSelection();
-        if (range) {
-          quill.clipboard.dangerouslyPasteHTML(range.index, html);
-          quill.focus();
-        }
+        editor.chain().focus().insertContent(html).run();
       }
     };
 
     const handleCopy = (e) => {
-      const range = quill.getSelection();
-      if (!range || range.length === 0) return;
+      const { selection } = editor.state;
+      if (selection.empty) return;
 
       e.preventDefault();
       const nativeSelection = window.getSelection();
@@ -751,152 +937,118 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         const container = document.createElement('div');
         container.appendChild(nativeRange.cloneContents());
         const html = container.innerHTML;
-        
         const markdown = htmlToMarkdown(html);
         
         e.clipboardData.setData('text/plain', markdown);
         e.clipboardData.setData('text/html', html);
       }
     };
-    quill.root.addEventListener('paste', handlePaste, true);
-    quill.root.addEventListener('copy', handleCopy);
 
-    // 7. Selection tracking for the Convert to Subtask popup
-    const handleSelectionChangeSubtask = (range) => {
-      if (!range || range.length === 0) {
-        setShowSelectionMenu(false);
-        return;
-      }
-
-      const text = quill.getText(range.index, range.length).trim();
-      if (text.length > 0 && onCreateSubtaskRef.current) {
-        const bounds = quill.getBounds(range.index, range.length);
-        
-        setSelectionMenuPosition({
-          top: bounds.top - 40,
-          left: bounds.left + (bounds.width / 2) - 60
-        });
-        setSelectedText(text);
-        setShowSelectionMenu(true);
-      } else {
-        setShowSelectionMenu(false);
-      }
-    };
-    quill.on('selection-change', handleSelectionChangeSubtask);
+    viewDom.addEventListener('mousemove', handleMouseMove);
+    viewDom.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('scroll', handleMouseLeave, true);
+    viewDom.addEventListener('contextmenu', handleNativeContextMenu);
+    viewDom.addEventListener('paste', handlePaste, true);
+    viewDom.addEventListener('copy', handleCopy);
 
     return () => {
-      quill.off('text-change', handleTextChangeCallback);
-      quill.off('selection-change', checkSlashCommand);
-      quill.off('text-change', checkSlashCommand);
-      quill.off('selection-change', checkActiveCell);
-      quill.off('text-change', checkActiveCell);
-      quill.off('text-change', handleTextChangeMarkdown);
-      quill.off('selection-change', handleSelectionChangeSubtask);
-      
-      if (quill.root) {
-        quill.root.removeEventListener('mousemove', handleMouseMove);
-        quill.root.removeEventListener('mouseleave', handleMouseLeave);
-        quill.root.removeEventListener('contextmenu', handleNativeContextMenu);
-        quill.root.removeEventListener('paste', handlePaste, true);
-        quill.root.removeEventListener('copy', handleCopy);
-      }
+      viewDom.removeEventListener('mousemove', handleMouseMove);
+      viewDom.removeEventListener('mouseleave', handleMouseLeave);
       window.removeEventListener('scroll', handleMouseLeave, true);
-      
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
-      quillRef.current = null;
+      viewDom.removeEventListener('contextmenu', handleNativeContextMenu);
+      viewDom.removeEventListener('paste', handlePaste, true);
+      viewDom.removeEventListener('copy', handleCopy);
       if (tableHoverTimeoutRef.current) clearTimeout(tableHoverTimeoutRef.current);
     };
-  }, []);
-
-  // Update value prop changes from outside cleanly
-  useEffect(() => {
-    const quill = quillRef.current;
-    if (quill) {
-      const currentHtml = quill.root.innerHTML;
-      if (value !== undefined && value !== currentHtml) {
-        const selection = quill.getSelection();
-        quill.clipboard.dangerouslyPasteHTML(value || '');
-        if (selection) {
-          quill.setSelection(selection.index, selection.length);
-        }
-      }
-    }
-  }, [value]);
+  }, [editor]);
 
   const selectHashOption = (taskItem) => {
-    const context = getEditorContext();
-    if (!context) return;
-    const { quill, lineIndex, cursorOffset, textBeforeCursor } = context;
+    if (!editor) return;
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+    const textBeforeCursor = $from.parent.textContent.slice(0, $from.parentOffset);
     const hashIndex = textBeforeCursor.lastIndexOf('#');
 
     if (hashIndex !== -1) {
-      const deleteIndex = lineIndex + hashIndex;
-      const deleteLength = cursorOffset - hashIndex;
-
-      quill.deleteText(deleteIndex, deleteLength);
-
-      const linkText = `#${taskItem.id}: ${taskItem.title}`;
-      quill.insertText(deleteIndex, linkText, 'link', `/tasks/${taskItem.id}`);
-      
-      quill.insertText(deleteIndex + linkText.length, ' ');
-      quill.setSelection(deleteIndex + linkText.length + 1);
+      const start = $from.pos - (textBeforeCursor.length - hashIndex);
+      editor.chain().focus()
+        .deleteRange({ from: start, to: $from.pos })
+        .insertContent(`<a href="/tasks/${taskItem.id}">#${taskItem.id}: ${taskItem.title}</a> `)
+        .run();
     }
 
     setShowHashMenu(false);
     setHashSelectedIndex(0);
-    quill.focus();
   };
 
   const selectEmojiOption = (emojiItem) => {
-    const context = getEditorContext();
-    if (!context) return;
-    const { quill, lineIndex, cursorOffset, textBeforeCursor } = context;
+    if (!editor) return;
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+    const textBeforeCursor = $from.parent.textContent.slice(0, $from.parentOffset);
     const colonIndex = textBeforeCursor.lastIndexOf(':');
 
     if (colonIndex !== -1) {
-      const deleteIndex = lineIndex + colonIndex;
-      const deleteLength = cursorOffset - colonIndex;
-
-      quill.deleteText(deleteIndex, deleteLength);
-
-      quill.insertText(deleteIndex, emojiItem.char);
-      quill.setSelection(deleteIndex + emojiItem.char.length);
+      const start = $from.pos - (textBeforeCursor.length - colonIndex);
+      editor.chain().focus()
+        .deleteRange({ from: start, to: $from.pos })
+        .insertContent(emojiItem.char + ' ')
+        .run();
     }
 
     setShowEmojiMenu(false);
     setEmojiSelectedIndex(0);
-    quill.focus();
   };
 
   const selectOption = (option) => {
-    const context = getEditorContext();
-    if (!context) return;
-    const { quill, line, lineIndex, cursorOffset } = context;
+    if (!editor) return;
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+    const textBeforeCursor = $from.parent.textContent.slice(0, $from.parentOffset);
+    const slashIndex = textBeforeCursor.lastIndexOf('/');
 
-    quill.deleteText(lineIndex, cursorOffset);
+    if (slashIndex !== -1) {
+      const start = $from.pos - (textBeforeCursor.length - slashIndex);
+      editor.chain().focus().deleteRange({ from: start, to: $from.pos }).run();
+    }
 
     if (option.type === 'format') {
-      quill.formatLine(lineIndex, 1, option.format, option.value);
+      if (option.format === 'paragraph') {
+        editor.chain().focus().setParagraph().run();
+      } else if (option.format === 'header') {
+        editor.chain().focus().toggleHeading({ level: option.value }).run();
+      } else if (option.format === 'list') {
+        if (option.value === 'bullet') {
+          editor.chain().focus().toggleBulletList().run();
+        } else if (option.value === 'ordered') {
+          editor.chain().focus().toggleOrderedList().run();
+        } else if (option.value === 'taskList') {
+          editor.chain().focus().toggleTaskList().run();
+        }
+      } else if (option.format === 'code-block') {
+        editor.chain().focus().toggleCodeBlock().run();
+      } else if (option.format === 'blockquote') {
+        editor.chain().focus().toggleBlockquote().run();
+      }
     } else if (option.type === 'action') {
       if (option.action === 'divider') {
-        quill.insertText(lineIndex, '────────────────────────────────────────\n');
+        editor.chain().focus().setHorizontalRule().run();
       } else if (option.action === 'collapsible') {
-        quill.clipboard.dangerouslyPasteHTML(lineIndex, '<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>');
+        editor.chain().focus().insertContent('<details><summary>Sección colapsable (haz clic para expandir)</summary><p>Escribe aquí el contenido oculto...</p></details>').run();
       } else if (option.action === 'table') {
-        const tableModule = quill.getModule('table');
-        if (tableModule) {
-          tableModule.insertTable(3, 3);
-        }
+        editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+      } else if (option.action === 'image') {
+        triggerImageUpload();
       } else if (option.action === 'clean') {
-        quill.removeFormat(lineIndex, line.length() - cursorOffset);
+        editor.chain().focus().unsetAllMarks().clearNodes().run();
       }
     }
 
     setShowSlashMenu(false);
     setSelectedIndex(0);
-    quill.focus();
   };
 
   const handleKeyDown = (e) => {
@@ -968,19 +1120,55 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   };
 
   const convertSelectionToSubtask = () => {
-    const quill = quillRef.current;
-    if (!quill) return;
-
-    const range = quill.getSelection();
-    if (!range) return;
-
-    quill.deleteText(range.index, range.length);
-    
-    if (onCreateSubtaskRef.current) {
-      onCreateSubtaskRef.current(selectedText);
+    if (!editor) return;
+    const { selection } = editor.state;
+    const text = editor.state.doc.textBetween(selection.from, selection.to, ' ').trim();
+    if (text.length > 0) {
+      editor.chain().focus().deleteRange({ from: selection.from, to: selection.to }).run();
+      if (onCreateSubtaskRef.current) {
+        onCreateSubtaskRef.current(text);
+      }
     }
+  };
 
-    setShowSelectionMenu(false);
+  // Helper to render categorized commands in slash menu
+  const renderSlashCommandsList = () => {
+    let currentCategory = '';
+    return filteredOptions.map((opt, idx) => {
+      const showHeader = opt.category !== currentCategory;
+      currentCategory = opt.category;
+      
+      return (
+        <div key={opt.key}>
+          {showHeader && <div className="slash-menu-category-header">{opt.category}</div>}
+          <div
+            className={`slash-command-item ${idx === selectedIndex ? 'active' : ''}`}
+            onClick={() => selectOption(opt)}
+          >
+            <div className="slash-command-icon">
+              {opt.key === 'paragraph' && <span style={{ fontSize: '0.9rem', color: '#3b82f6', fontWeight: 'bold' }}>¶</span>}
+              {opt.key === 'h1' && <span style={{ fontWeight: 800, fontSize: '0.8rem', color: '#ef4444' }}>H1</span>}
+              {opt.key === 'h2' && <span style={{ fontWeight: 800, fontSize: '0.7rem', color: '#f97316' }}>H2</span>}
+              {opt.key === 'h3' && <span style={{ fontWeight: 800, fontSize: '0.6rem', color: '#eab308' }}>H3</span>}
+              {opt.key === 'taskList' && <span style={{ color: '#22c55e', fontWeight: 'bold' }}>☑</span>}
+              {opt.key === 'bullet' && <span style={{ fontSize: '1.2rem', color: '#a855f7', fontWeight: 'bold' }}>•</span>}
+              {opt.key === 'ordered' && <span style={{ color: '#ec4899', fontSize: '0.8rem', fontWeight: 'bold' }}>1.</span>}
+              {opt.key === 'code' && <span style={{ fontSize: '0.75rem', color: '#3b82f6' }}>&lt;/&gt;</span>}
+              {opt.key === 'callout' && <span style={{ color: '#eab308' }}>💡</span>}
+              {opt.key === 'collapsible' && <span style={{ color: '#f97316' }}>▼</span>}
+              {opt.key === 'table' && <span style={{ color: '#a855f7' }}>田</span>}
+              {opt.key === 'image' && <span style={{ color: '#3b82f6' }}>🖼️</span>}
+              {opt.key === 'divider' && <span style={{ color: '#8e95a5' }}>—</span>}
+              {opt.key === 'clean' && <span style={{ color: '#ef4444' }}>✕</span>}
+            </div>
+            <div className="slash-command-text">
+              <span className="slash-command-label">{opt.label}</span>
+              <span className="slash-command-desc">{opt.desc}</span>
+            </div>
+          </div>
+        </div>
+      );
+    });
   };
 
   return (
@@ -989,10 +1177,198 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       onKeyDownCapture={handleKeyDown}
       style={{ position: 'relative' }}
     >
-      <div 
-        ref={containerRef} 
-        className="quill-editor-wrapper"
-      />
+      {/* Empty Line Plus Button on Left Margin */}
+      {showPlusButton && (
+        <button
+          type="button"
+          className="editor-empty-line-plus-btn"
+          style={{
+            position: 'absolute',
+            top: plusButtonPosition.top,
+            left: '-28px',
+            zIndex: 10
+          }}
+          onClick={handlePlusButtonClick}
+          title="Insertar elemento"
+        >
+          +
+        </button>
+      )}
+
+      <EditorContent editor={editor} className="quill-editor-wrapper" />
+
+      {editor && (
+        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+          <div className="table-bubble-toolbar" style={{ flexWrap: 'wrap', gap: '2px', padding: '4px' }}>
+            <button
+              type="button"
+              className={`table-bubble-btn ${editor.isActive('bold') ? 'active' : ''}`}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              title="Negrita"
+            >
+              <span>N</span>
+            </button>
+            <button
+              type="button"
+              className={`table-bubble-btn ${editor.isActive('italic') ? 'active' : ''}`}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              title="Cursiva"
+            >
+              <span>C</span>
+            </button>
+            <button
+              type="button"
+              className={`table-bubble-btn ${editor.isActive('underline') ? 'active' : ''}`}
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              title="Subrayado"
+            >
+              <span>S</span>
+            </button>
+            <button
+              type="button"
+              className={`table-bubble-btn ${editor.isActive('strike') ? 'active' : ''}`}
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              title="Tachado"
+            >
+              <span>T</span>
+            </button>
+            <button
+              type="button"
+              className={`table-bubble-btn ${editor.isActive('code') ? 'active' : ''}`}
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              title="Código en línea"
+            >
+              <span>&lt;&gt;</span>
+            </button>
+            <button
+              type="button"
+              className={`table-bubble-btn ${editor.isActive('link') ? 'active' : ''}`}
+              onClick={() => {
+                if (editor.isActive('link')) {
+                  editor.chain().focus().unsetLink().run();
+                } else {
+                  const url = window.prompt('URL:');
+                  if (url) {
+                    editor.chain().focus().setLink({ href: url }).run();
+                  }
+                }
+              }}
+              title="Enlace"
+            >
+              <span>🔗</span>
+            </button>
+
+            {/* Text Color Dropdown */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                type="button"
+                className={`table-bubble-btn ${showColorPicker ? 'active' : ''}`}
+                onClick={() => {
+                  setShowColorPicker(!showColorPicker);
+                  setShowHighlightPicker(false);
+                }}
+                title="Color de texto"
+              >
+                <span style={{ borderBottom: '2px solid', paddingBottom: '1px' }}>A</span>
+              </button>
+              {showColorPicker && (
+                <div className="editor-color-dropdown">
+                  <div className="editor-color-dropdown-title">Color de texto</div>
+                  {textColors.map(c => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      className="editor-color-dropdown-item"
+                      onClick={() => {
+                        if (c.value) {
+                          editor.chain().focus().setColor(c.value).run();
+                        } else {
+                          editor.chain().focus().unsetColor().run();
+                        }
+                        setShowColorPicker(false);
+                      }}
+                    >
+                      <div className="color-circle" style={{ backgroundColor: c.color }} />
+                      <span>{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Text Highlight Dropdown */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                type="button"
+                className={`table-bubble-btn ${showHighlightPicker ? 'active' : ''}`}
+                onClick={() => {
+                  setShowHighlightPicker(!showHighlightPicker);
+                  setShowColorPicker(false);
+                }}
+                title="Resaltado de texto"
+              >
+                <span>🖋️</span>
+              </button>
+              {showHighlightPicker && (
+                <div className="editor-color-dropdown">
+                  <div className="editor-color-dropdown-title">Resaltado</div>
+                  {highlightColors.map(c => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      className="editor-color-dropdown-item"
+                      onClick={() => {
+                        if (c.value) {
+                          editor.chain().focus().setHighlight({ color: c.value }).run();
+                        } else {
+                          editor.chain().focus().unsetHighlight().run();
+                        }
+                        setShowHighlightPicker(false);
+                      }}
+                    >
+                      <div className="color-circle" style={{ backgroundColor: c.color, border: '1px solid rgba(255,255,255,0.1)' }} />
+                      <span>{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="table-bubble-btn danger"
+              onClick={cleanFormatting}
+              title="Limpiar Formato"
+            >
+              <span>✕</span>
+            </button>
+            {onCreateSubtask && (
+              <>
+                <div className="table-bubble-divider" />
+                <button
+                  type="button"
+                  className="table-bubble-btn"
+                  onClick={convertSelectionToSubtask}
+                  style={{
+                    backgroundColor: 'var(--accent-hover)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    paddingLeft: '8px',
+                    paddingRight: '8px',
+                    borderRadius: '4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Convertir selección en subtarea"
+                >
+                  <span>✨ Convertir en subtarea</span>
+                </button>
+              </>
+            )}
+          </div>
+        </BubbleMenu>
+      )}
 
       <button
         className={`table-hover-add-btn col-add-btn ${colButtonPos.visible ? 'visible' : ''}`}
@@ -1092,8 +1468,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       {showContextMenu && (
         <div 
           className={`calendar-context-menu editor-context-menu ${
-            quillRef.current && 
-            contextMenuPosition.x > (quillRef.current.container.getBoundingClientRect().width / 2) 
+            editor && 
+            contextMenuPosition.x > (editor.view.dom.getBoundingClientRect().width / 2) 
               ? 'align-left' 
               : ''
           }`}
@@ -1188,15 +1564,11 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
             <div className="context-menu-submenu">
               <div 
                 className={`context-menu-item ${
-                  !(quillRef.current?.getSelection()?.length > 0) ? 'disabled' : ''
+                  editor?.state.selection.empty ? 'disabled' : ''
                 }`}
-                onClick={() => {
-                  if (quillRef.current?.getSelection()?.length > 0) {
-                    copySelectionAsMarkdown();
-                  }
-                }}
+                onClick={copySelectionAsMarkdown}
                 style={
-                  !(quillRef.current?.getSelection()?.length > 0) 
+                  editor?.state.selection.empty 
                     ? { opacity: 0.4, cursor: 'not-allowed' } 
                     : {}
                 }
@@ -1238,28 +1610,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
             zIndex: 10000
           }}
         >
-          {filteredOptions.map((opt, idx) => (
-            <div
-              key={opt.key}
-              className={`slash-command-item ${idx === selectedIndex ? 'active' : ''}`}
-              onClick={() => selectOption(opt)}
-            >
-              <div className="slash-command-icon">
-                {opt.key === 'h1' && <span style={{ fontWeight: 800, fontSize: '0.8rem' }}>H1</span>}
-                {opt.key === 'h2' && <span style={{ fontWeight: 800, fontSize: '0.7rem' }}>H2</span>}
-                {opt.key === 'bullet' && <span>•</span>}
-                {opt.key === 'ordered' && <span>1.</span>}
-                {opt.key === 'code' && <span style={{ fontSize: '0.75rem' }}>&lt;/&gt;</span>}
-                {opt.key === 'callout' && <span>💡</span>}
-                {opt.key === 'divider' && <span>—</span>}
-                {opt.key === 'clean' && <span>✕</span>}
-              </div>
-              <div className="slash-command-text">
-                <span className="slash-command-label">{opt.label}</span>
-                <span className="slash-command-desc">{opt.desc}</span>
-              </div>
-            </div>
-          ))}
+          {renderSlashCommandsList()}
         </div>
       )}
 
@@ -1320,25 +1671,9 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           ))}
         </div>
       )}
-
-      {showSelectionMenu && (
-        <button
-          className="convert-selection-btn"
-          onClick={convertSelectionToSubtask}
-          style={{
-            position: 'absolute',
-            top: selectionMenuPosition.top,
-            left: selectionMenuPosition.left,
-          }}
-        >
-          <span>✨</span>
-          <span>Convertir en subtarea</span>
-        </button>
-      )}
     </div>
   );
 }
-
 export function markdownToHtml(md) {
   const lines = md.split('\n');
   let html = '';
@@ -1346,6 +1681,7 @@ export function markdownToHtml(md) {
   let listType = ''; // 'ul' or 'ol'
   let inCodeBlock = false;
   let inTable = false;
+  let inDetails = false;
   let tableRows = [];
 
   const flushTable = () => {
@@ -1361,6 +1697,13 @@ export function markdownToHtml(md) {
       html += listType === 'ul' ? '</ul>' : '</ol>';
       inList = false;
       listType = '';
+    }
+  };
+
+  const flushDetails = () => {
+    if (inDetails) {
+      html += '</details>';
+      inDetails = false;
     }
   };
 
@@ -1380,6 +1723,7 @@ export function markdownToHtml(md) {
     if (line.trim().startsWith('```')) {
       flushTable();
       flushList();
+      flushDetails();
       html += '<pre class="ql-syntax">';
       inCodeBlock = true;
       continue;
@@ -1389,6 +1733,7 @@ export function markdownToHtml(md) {
     const isTableRow = line.trim().startsWith('|') && line.trim().endsWith('|');
     if (isTableRow) {
       flushList();
+      flushDetails();
       inTable = true;
       tableRows.push(line.trim());
       continue;
@@ -1399,6 +1744,7 @@ export function markdownToHtml(md) {
     // 2. Blockquotes / Accordions
     if (line.startsWith('> ')) {
       flushList();
+      flushDetails();
       const content = line.slice(2);
       html += `<blockquote>${parseInlineMarkdown(content)}</blockquote>`;
       continue;
@@ -1406,24 +1752,29 @@ export function markdownToHtml(md) {
 
     if (line.startsWith('>>> ')) {
       flushList();
+      flushDetails();
       const title = line.slice(4).trim();
-      html += `<details><summary>${parseInlineMarkdown(title)}</summary><p>Escribe aquí el contenido...</p></details>`;
+      html += `<details><summary>${parseInlineMarkdown(title)}</summary>`;
+      inDetails = true;
       continue;
     }
 
     // 3. Headings
     if (line.startsWith('# ')) {
       flushList();
+      flushDetails();
       html += `<h1>${parseInlineMarkdown(line.slice(2))}</h1>`;
       continue;
     }
     if (line.startsWith('## ')) {
       flushList();
+      flushDetails();
       html += `<h2>${parseInlineMarkdown(line.slice(3))}</h2>`;
       continue;
     }
     if (line.startsWith('### ')) {
       flushList();
+      flushDetails();
       html += `<h3>${parseInlineMarkdown(line.slice(4))}</h3>`;
       continue;
     }
@@ -1436,7 +1787,14 @@ export function markdownToHtml(md) {
         inList = true;
         listType = 'ul';
       }
-      html += `<li>${parseInlineMarkdown(line.slice(2))}</li>`;
+      const taskMatch = /^\[([ xX])\]\s(.*)/.exec(line.slice(2).trim());
+      if (taskMatch) {
+        const isChecked = taskMatch[1].toLowerCase() === 'x';
+        const taskText = taskMatch[2];
+        html += `<li data-checked="${isChecked}">${parseInlineMarkdown(taskText)}</li>`;
+      } else {
+        html += `<li>${parseInlineMarkdown(line.slice(2))}</li>`;
+      }
       continue;
     }
 
@@ -1466,6 +1824,7 @@ export function markdownToHtml(md) {
 
   flushTable();
   flushList();
+  flushDetails();
   if (inCodeBlock) {
     html += '</pre>';
   }
@@ -1486,7 +1845,6 @@ function renderMarkdownTable(rows) {
   const headers = parseRow(rows[0]);
   let startIndex = 1;
   
-  // Check if second row is divider
   if (rows.length > 1) {
     const secondRowCells = parseRow(rows[1]);
     const isDivider = secondRowCells.length > 0 && secondRowCells.every(c => /^[:\-\s]+$/.test(c) && c.includes('-'));
@@ -1495,19 +1853,16 @@ function renderMarkdownTable(rows) {
     }
   }
 
-  let tableHtml = '<table class="ql-table"><tbody>';
+  let tableHtml = '<table><tbody>';
   
-  // Render headers
   tableHtml += '<tr>';
   headers.forEach(h => {
-    tableHtml += `<td class="ql-table-cell"><strong>${parseInlineMarkdown(h)}</strong></td>`;
+    tableHtml += `<th>${parseInlineMarkdown(h)}</th>`;
   });
   tableHtml += '</tr>';
 
-  // Render cells
   for (let i = startIndex; i < rows.length; i++) {
     const rowLine = rows[i].trim();
-    // Skip divider row if encountered later
     const rowCellsForCheck = parseRow(rowLine);
     const isDivider = rowCellsForCheck.length > 0 && rowCellsForCheck.every(c => /^[:\-\s]+$/.test(c) && c.includes('-'));
     if (isDivider) continue;
@@ -1516,7 +1871,7 @@ function renderMarkdownTable(rows) {
     tableHtml += '<tr>';
     for (let j = 0; j < headers.length; j++) {
       const val = cells[j] || '';
-      tableHtml += `<td class="ql-table-cell">${parseInlineMarkdown(val)}</td>`;
+      tableHtml += `<td>${parseInlineMarkdown(val)}</td>`;
     }
     tableHtml += '</tr>';
   }
@@ -1536,6 +1891,7 @@ function parseInlineMarkdown(text) {
   
   parsed = parsed.replace(/~~(.*?)~~/g, '<s>$1</s>');
   parsed = parsed.replace(/`(.*?)`/g, '<code>$1</code>');
+  parsed = parsed.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1">');
   parsed = parsed.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
 
   return parsed;
@@ -1577,7 +1933,8 @@ function nodeToMarkdown(node) {
         if (innerText.trim() === '') {
           md += '\n';
         } else {
-          md += `${innerText}\n\n`;
+          const inDetailsContext = !!(child.closest && child.closest('details'));
+          md += `${innerText}${inDetailsContext ? '\n' : '\n\n'}`;
         }
         break;
       case 'br':
@@ -1598,6 +1955,11 @@ function nodeToMarkdown(node) {
         break;
       case 'code':
         md += `\`${nodeToMarkdown(child)}\``;
+        break;
+      case 'img':
+        const imgsrc = child.getAttribute('src') || '';
+        const imgalt = child.getAttribute('alt') || '';
+        md += `![${imgalt}](${imgsrc})\n\n`;
         break;
       case 'table':
         const trs = Array.from(child.querySelectorAll('tr'));
@@ -1628,7 +1990,6 @@ function nodeToMarkdown(node) {
       case 'tr':
       case 'td':
       case 'th':
-        // Handled by case 'table'
         break;
       case 'pre':
         md += `\`\`\`\n${child.textContent.replace(/\n$/, '')}\n\`\`\`\n\n`;
@@ -1648,11 +2009,17 @@ function nodeToMarkdown(node) {
         md += `>>> ${summaryText}\n${detailsContent}\n\n`;
         break;
       case 'summary':
-        // Handled in details
         break;
       case 'ul':
-        for (let li of child.children) {
-          md += `* ${nodeToMarkdown(li)}\n`;
+        if (child.getAttribute('data-type') === 'taskList') {
+          for (let li of child.children) {
+            const isChecked = li.getAttribute('data-checked') === 'true';
+            md += `${isChecked ? '[x]' : '[ ]'} ${nodeToMarkdown(li).trim()}\n`;
+          }
+        } else {
+          for (let li of child.children) {
+            md += `* ${nodeToMarkdown(li)}\n`;
+          }
         }
         md += '\n';
         break;
@@ -1665,7 +2032,12 @@ function nodeToMarkdown(node) {
         md += '\n';
         break;
       case 'li':
-        md += `* ${nodeToMarkdown(child)}\n`;
+        if (child.hasAttribute('data-checked')) {
+          const isChecked = child.getAttribute('data-checked') === 'true';
+          md += `${isChecked ? '[x]' : '[ ]'} ${nodeToMarkdown(child).trim()}\n`;
+        } else {
+          md += `* ${nodeToMarkdown(child)}\n`;
+        }
         break;
       case 'a':
         const href = child.getAttribute('href') || '';
@@ -1679,4 +2051,3 @@ function nodeToMarkdown(node) {
 
   return md.replace(/\n{3,}/g, '\n\n');
 }
-
