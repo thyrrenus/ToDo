@@ -25,7 +25,7 @@ const ProjectKanbanView = lazy(() => import('./components/ProjectKanbanView').th
 const AddTaskWidget = lazy(() => import('./components/AddTaskWidget').then(m => ({ default: m.AddTaskWidget })));
 const CompletedView = lazy(() => import('./components/CompletedView').then(m => ({ default: m.CompletedView })));
 
-import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff } from 'lucide-react';
+import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff, SlidersHorizontal } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { useTodo } from './context/TodoContext';
 import { parseTimezoneOffset } from './utils/timezone';
@@ -128,6 +128,16 @@ function App() {
     startSpeechRecognition,
     handleReadAgendaAloud
   } = useTodo();
+
+  const [showFilters, setShowFilters] = useState(() => localStorage.getItem('showFilters') === 'true');
+
+  const toggleFilters = () => {
+    setShowFilters(prev => {
+      const newVal = !prev;
+      localStorage.setItem('showFilters', String(newVal));
+      return newVal;
+    });
+  };
 
   const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
   const inboxListId = inboxList ? inboxList.id : null;
@@ -527,6 +537,42 @@ function App() {
                     </button>
                   )}
                   <button 
+                    onClick={toggleFilters}
+                    title={showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+                    style={{
+                      background: showFilters ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      border: showFilters ? '1px solid var(--accent-hover, #7c3aed)' : 'none',
+                      borderRadius: '50%',
+                      width: '28px',
+                      height: '28px',
+                      color: showFilters ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      marginLeft: 'auto',
+                      position: 'relative'
+                    }}
+                    onMouseEnter={e => { if (!showFilters) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                    onMouseLeave={e => { if (!showFilters) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                  >
+                    <SlidersHorizontal size={14} />
+                    {!showFilters && (filterPriority !== null || filterTagId !== null || !filterHideCompleted) && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-2px',
+                        right: '-2px',
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: 'var(--accent-hover, #7c3aed)',
+                        border: '1px solid var(--bg-primary, #121212)'
+                      }} />
+                    )}
+                  </button>
+
+                  <button 
                     onClick={() => setIsShortcutsModalOpen(true)}
                     title="Atajos de teclado (?)"
                     style={{
@@ -541,7 +587,7 @@ function App() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       transition: 'all 0.2s',
-                      marginLeft: 'auto'
+                      marginLeft: '8px'
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
@@ -683,173 +729,180 @@ function App() {
               </form>
 
               {/* --- PREMIUM CENTRAL QUICK FILTER BAR --- */}
-              <div 
-                className="quick-filter-bar"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                  borderRadius: '12px',
-                  padding: '10px 14px',
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '8px',
-                  alignItems: 'center',
-                  marginBottom: '16px',
-                  backdropFilter: 'blur(10px)',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-                  animation: 'fadeIn 0.2s ease-out'
-                }}
-              >
-                {/* Priority Selection Pills */}
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', borderRight: '1px solid rgba(255,255,255,0.08)', paddingRight: '12px', marginRight: '4px', flexShrink: 0 }}>
-                  {[
-                    { val: 3, label: '!!! Alta', color: '#ef4444' },
-                    { val: 2, label: '!! Media', color: '#f59e0b' },
-                    { val: 1, label: '! Baja', color: '#3b82f6' }
-                  ].map(p => {
-                    const isAct = filterPriority === p.val;
-                    return (
+              <AnimatePresence>
+                {showFilters && (
+                  <motion.div 
+                    className="quick-filter-bar"
+                    initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+                    animate={{ height: 'auto', opacity: 1, marginBottom: 16 }}
+                    exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      borderRadius: '12px',
+                      padding: '10px 14px',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      alignItems: 'center',
+                      backdropFilter: 'blur(10px)',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {/* Priority Selection Pills */}
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', borderRight: '1px solid rgba(255,255,255,0.08)', paddingRight: '12px', marginRight: '4px', flexShrink: 0 }}>
+                      {[
+                        { val: 3, label: '!!! Alta', color: '#ef4444' },
+                        { val: 2, label: '!! Media', color: '#f59e0b' },
+                        { val: 1, label: '! Baja', color: '#3b82f6' }
+                      ].map(p => {
+                        const isAct = filterPriority === p.val;
+                        return (
+                          <button
+                            key={p.val}
+                            type="button"
+                            onClick={() => setFilterPriority(prev => prev === p.val ? null : p.val)}
+                            style={{
+                              background: isAct ? `${p.color}22` : 'rgba(255, 255, 255, 0.02)',
+                              border: isAct ? `1.5px solid ${p.color}` : '1.5px solid rgba(255, 255, 255, 0.05)',
+                              borderRadius: '20px',
+                              color: isAct ? p.color : 'var(--text-secondary)',
+                              padding: '5px 12px',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: isAct ? `0 0 10px ${p.color}30` : 'none',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => { if (!isAct) e.currentTarget.style.borderColor = p.color; }}
+                            onMouseLeave={e => { if (!isAct) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Hide Completed Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setFilterHideCompleted(prev => !prev)}
+                      style={{
+                        background: !filterHideCompleted ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                        border: !filterHideCompleted ? '1.5px solid var(--accent-hover, #7c3aed)' : '1.5px solid rgba(255, 255, 255, 0.05)',
+                        borderRadius: '50%',
+                        width: '32px',
+                        height: '32px',
+                        color: !filterHideCompleted ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: !filterHideCompleted ? '0 0 10px rgba(124, 58, 237, 0.25)' : 'none',
+                        transition: 'all 0.2s ease',
+                        flexShrink: 0
+                      }}
+                      title={filterHideCompleted ? 'Mostrar tareas completadas' : 'Ocultar tareas completadas'}
+                      onMouseEnter={e => { 
+                        if (filterHideCompleted) {
+                          e.currentTarget.style.borderColor = 'var(--accent-hover, #7c3aed)';
+                          e.currentTarget.style.color = '#ffffff';
+                        }
+                      }}
+                      onMouseLeave={e => { 
+                        if (filterHideCompleted) {
+                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+                          e.currentTarget.style.color = 'var(--text-secondary)';
+                        }
+                      }}
+                    >
+                      {filterHideCompleted ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+
+                    {/* Vertical Divider */}
+                    <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.08)', margin: '0 4px', flexShrink: 0 }} />
+
+                    {/* Tags Carousel */}
+                    <div 
+                      style={{ 
+                        display: 'flex', 
+                        gap: '6px', 
+                        overflowX: 'auto', 
+                        flex: 1, 
+                        padding: '2px 0', 
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none'
+                      }}
+                    >
+                      {tags.map(t => {
+                        const isAct = filterTagId === t.id;
+                        const tagColor = t.color || '#8e95a5';
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setFilterTagId(prev => prev === t.id ? null : t.id)}
+                            style={{
+                              background: isAct ? `${tagColor}22` : 'rgba(255, 255, 255, 0.02)',
+                              border: isAct ? `1.5px solid ${tagColor}` : '1.5px solid rgba(255, 255, 255, 0.05)',
+                              borderRadius: '20px',
+                              color: isAct ? tagColor : 'var(--text-secondary)',
+                              padding: '5px 12px',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              boxShadow: isAct ? `0 0 10px ${tagColor}30` : 'none',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => { if (!isAct) e.currentTarget.style.borderColor = tagColor; }}
+                            onMouseLeave={e => { if (!isAct) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                          >
+                            #{t.name}
+                          </button>
+                        );
+                      })}
+                      {tags.length === 0 && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', paddingLeft: '4px' }}>Sin etiquetas</span>
+                      )}
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    {(filterPriority !== null || filterHideCompleted || filterTagId !== null) && (
                       <button
-                        key={p.val}
                         type="button"
-                        onClick={() => setFilterPriority(prev => prev === p.val ? null : p.val)}
+                        onClick={() => {
+                          setFilterPriority(null);
+                          setFilterHideCompleted(false);
+                          setFilterTagId(null);
+                        }}
                         style={{
-                          background: isAct ? `${p.color}22` : 'rgba(255, 255, 255, 0.02)',
-                          border: isAct ? `1.5px solid ${p.color}` : '1.5px solid rgba(255, 255, 255, 0.05)',
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          border: '1.5px solid var(--danger-color)',
                           borderRadius: '20px',
-                          color: isAct ? p.color : 'var(--text-secondary)',
+                          color: 'var(--danger-color)',
                           padding: '5px 12px',
                           fontSize: '0.78rem',
                           fontWeight: 700,
                           cursor: 'pointer',
-                          boxShadow: isAct ? `0 0 10px ${p.color}30` : 'none',
-                          transition: 'all 0.2s ease'
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s',
+                          boxShadow: '0 0 10px rgba(239, 68, 68, 0.15)',
+                          flexShrink: 0
                         }}
-                        onMouseEnter={e => { if (!isAct) e.currentTarget.style.borderColor = p.color; }}
-                        onMouseLeave={e => { if (!isAct) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
                       >
-                        {p.label}
+                        Limpiar
                       </button>
-                    );
-                  })}
-                </div>
-
-                {/* Hide Completed Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setFilterHideCompleted(prev => !prev)}
-                  style={{
-                    background: !filterHideCompleted ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                    border: !filterHideCompleted ? '1.5px solid var(--accent-hover, #7c3aed)' : '1.5px solid rgba(255, 255, 255, 0.05)',
-                    borderRadius: '50%',
-                    width: '32px',
-                    height: '32px',
-                    color: !filterHideCompleted ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: !filterHideCompleted ? '0 0 10px rgba(124, 58, 237, 0.25)' : 'none',
-                    transition: 'all 0.2s ease',
-                    flexShrink: 0
-                  }}
-                  title={filterHideCompleted ? 'Mostrar tareas completadas' : 'Ocultar tareas completadas'}
-                  onMouseEnter={e => { 
-                    if (filterHideCompleted) {
-                      e.currentTarget.style.borderColor = 'var(--accent-hover, #7c3aed)';
-                      e.currentTarget.style.color = '#ffffff';
-                    }
-                  }}
-                  onMouseLeave={e => { 
-                    if (filterHideCompleted) {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                    }
-                  }}
-                >
-                  {filterHideCompleted ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-
-                {/* Vertical Divider */}
-                <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.08)', margin: '0 4px', flexShrink: 0 }} />
-
-                {/* Tags Carousel */}
-                <div 
-                  style={{ 
-                    display: 'flex', 
-                    gap: '6px', 
-                    overflowX: 'auto', 
-                    flex: 1, 
-                    padding: '2px 0', 
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none'
-                  }}
-                >
-                  {tags.map(t => {
-                    const isAct = filterTagId === t.id;
-                    const tagColor = t.color || '#8e95a5';
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setFilterTagId(prev => prev === t.id ? null : t.id)}
-                        style={{
-                          background: isAct ? `${tagColor}22` : 'rgba(255, 255, 255, 0.02)',
-                          border: isAct ? `1.5px solid ${tagColor}` : '1.5px solid rgba(255, 255, 255, 0.05)',
-                          borderRadius: '20px',
-                          color: isAct ? tagColor : 'var(--text-secondary)',
-                          padding: '5px 12px',
-                          fontSize: '0.78rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          boxShadow: isAct ? `0 0 10px ${tagColor}30` : 'none',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => { if (!isAct) e.currentTarget.style.borderColor = tagColor; }}
-                        onMouseLeave={e => { if (!isAct) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; }}
-                      >
-                        #{t.name}
-                      </button>
-                    );
-                  })}
-                  {tags.length === 0 && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', paddingLeft: '4px' }}>Sin etiquetas</span>
-                  )}
-                </div>
-
-                {/* Clear Filters Button */}
-                {(filterPriority !== null || filterHideCompleted || filterTagId !== null) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFilterPriority(null);
-                      setFilterHideCompleted(false);
-                      setFilterTagId(null);
-                    }}
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1.5px solid var(--danger-color)',
-                      borderRadius: '20px',
-                      color: 'var(--danger-color)',
-                      padding: '5px 12px',
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      transition: 'all 0.2s',
-                      boxShadow: '0 0 10px rgba(239, 68, 68, 0.15)',
-                      flexShrink: 0
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-                  >
-                    Limpiar
-                  </button>
+                    )}
+                  </motion.div>
                 )}
-              </div>
+              </AnimatePresence>
 
               {loading ? (
                 <div>Loading...</div>

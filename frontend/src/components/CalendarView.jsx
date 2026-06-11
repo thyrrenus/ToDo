@@ -538,7 +538,9 @@ export function CalendarView() {
             <div className="time-axis">
               {hours.map(hour => (
                 <div key={hour} className="time-label" style={{ height: `${PIXELS_PER_HOUR}px` }}>
-                  {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                  <span>
+                    {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                  </span>
                 </div>
               ))}
             </div>

@@ -53,7 +53,8 @@ export function Sidebar() {
     listGroups = [],
     fetchListGroups: onRefreshListGroups,
     handleUpdateTaskList: onUpdateTaskList,
-    handleRescheduleTask: onRescheduleTask
+    handleRescheduleTask: onRescheduleTask,
+    fetchTags: onRefreshTags
   } = useTodo();
 
   const setActiveList = (val) => {
@@ -65,6 +66,11 @@ export function Sidebar() {
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [selectedListGroupId, setSelectedListGroupId] = useState('');
   const [selectedListIcon, setSelectedListIcon] = useState('Briefcase');
+
+  // Tag creation states
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [selectedTagColor, setSelectedTagColor] = useState(COLORS[0]);
 
   // Edit list states
   const [editingListId, setEditingListId] = useState(null);
@@ -121,6 +127,29 @@ export function Sidebar() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleAddTag = async (e) => {
+    if (e) e.preventDefault();
+    const name = newTagName.trim();
+    if (!name) return;
+
+    try {
+      const res = await fetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: selectedTagColor })
+      });
+      if (res.ok) {
+        setIsAddingTag(false);
+        setNewTagName('');
+        if (onRefreshTags) {
+          await onRefreshTags();
+        }
+      }
+    } catch (err) {
+      console.error('Error creating tag:', err);
     }
   };
 
@@ -669,6 +698,15 @@ export function Sidebar() {
       <div className="nav-section" style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
         <div className="nav-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Etiquetas</span>
+          <button 
+            type="button"
+            className="icon-btn" 
+            onClick={() => { setIsAddingTag(true); setNewTagName(''); setSelectedTagColor(COLORS[0]); }} 
+            title="Añadir Etiqueta"
+            style={{ padding: '2px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          >
+            <Plus size={14} />
+          </button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 4px' }}>
           {tags.map(tag => {
@@ -1194,6 +1232,171 @@ export function Sidebar() {
                     e.currentTarget.style.boxShadow = `0 4px 15px ${
                       editingGroupId !== null ? editingGroupColor + '30' : selectedGroupColor + '30'
                     }`;
+                  }}
+                >
+                  <Check size={14} /> Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- PREMIUM TAG CREATION OVERLAY MODAL --- */}
+      {isAddingTag && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setIsAddingTag(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <div 
+            className="modal-card"
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '440px',
+              background: 'rgba(28, 28, 30, 0.95)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: `0 24px 50px rgba(0, 0, 0, 0.6), 0 0 40px ${selectedTagColor}20`,
+              animation: 'fadeIn 0.2s ease-out'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🏷️ Crear Nueva Etiqueta
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsAddingTag(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTag} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Nombre de la etiqueta</label>
+                <input 
+                  type="text" 
+                  placeholder="Nombre de la etiqueta..." 
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  autoFocus
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: `1.5px solid ${selectedTagColor}`,
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    padding: '10px 14px',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                    width: '100%',
+                    boxShadow: `0 0 10px ${selectedTagColor}25`,
+                    transition: 'all 0.3s ease'
+                  }}
+                />
+              </div>
+
+              {/* Color circular selectors */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Seleccionar Color</label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '4px 0' }}>
+                  {COLORS.map(color => {
+                    const isActive = selectedTagColor === color;
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setSelectedTagColor(color)}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          backgroundColor: color,
+                          border: isActive ? '2.5px solid white' : 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          boxShadow: isActive ? `0 0 12px ${color}` : 'none',
+                          transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'scale(1.15)';
+                          e.currentTarget.style.boxShadow = `0 0 10px ${color}`;
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = isActive ? 'scale(1.15)' : 'scale(1)';
+                          e.currentTarget.style.boxShadow = isActive ? `0 0 12px ${color}` : 'none';
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddingTag(false)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    borderRadius: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <X size={14} /> Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  style={{
+                    background: `linear-gradient(135deg, ${selectedTagColor} 0%, var(--accent-hover) 100%)`,
+                    border: 'none',
+                    color: 'white',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    padding: '8px 20px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    boxShadow: `0 4px 15px ${selectedTagColor}30`,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = `0 6px 20px ${selectedTagColor}40`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 4px 15px ${selectedTagColor}30`;
                   }}
                 >
                   <Check size={14} /> Guardar

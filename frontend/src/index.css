@@ -609,10 +609,16 @@ body {
 .time-label {
   display: flex;
   justify-content: flex-end;
+  align-items: flex-start;
   padding-right: 0.5rem;
   font-size: 0.7rem;
   color: var(--text-secondary);
+}
+
+.time-label span {
   transform: translateY(-50%);
+  display: inline-block;
+  line-height: 1;
 }
 
 .day-columns {
@@ -631,7 +637,18 @@ body {
 }
 
 .grid-cell {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  position: relative;
+}
+
+.grid-cell::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.015);
+  pointer-events: none;
 }
 
 .task-block {

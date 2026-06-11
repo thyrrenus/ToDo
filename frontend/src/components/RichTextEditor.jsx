@@ -212,15 +212,11 @@ const highlightColors = [
   { name: 'Resaltado Violeta', value: 'rgba(168, 85, 247, 0.2)', color: 'rgba(168, 85, 247, 0.2)' },
   { name: 'Resaltado Rosa', value: 'rgba(236, 72, 153, 0.2)', color: 'rgba(236, 72, 153, 0.2)' },
 ];
-
 export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCreateSubtask }) {
-  const [hoveredTable, setHoveredTable] = useState(null);
-  const [hoveredCell, setHoveredCell] = useState(null);
-  const [colButtonPos, setColButtonPos] = useState({ top: 0, left: 0, visible: false });
-  const [rowButtonPos, setRowButtonPos] = useState({ top: 0, left: 0, visible: false });
-  const [activeCell, setActiveCell] = useState(null);
-  const [tableToolbarPos, setTableToolbarPos] = useState({ top: 0, left: 0, visible: false });
-  const tableHoverTimeoutRef = useRef(null);
+  const [activeCellElement, setActiveCellElement] = useState(null);
+  const [showColMenu, setShowColMenu] = useState(false);
+  const [showRowMenu, setShowRowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
@@ -273,37 +269,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     }
   };
 
-  const addColumnAtHover = (tdElement) => {
-    if (!tdElement || !editor) return;
-    selectCell(tdElement);
-    editor.chain().focus().addColumnAfter().run();
-    setColButtonPos(prev => ({ ...prev, visible: false }));
-    setRowButtonPos(prev => ({ ...prev, visible: false }));
-  };
 
-  const addRowAtHover = (tdElement) => {
-    if (!tdElement || !editor) return;
-    selectCell(tdElement);
-    editor.chain().focus().addRowAfter().run();
-    setColButtonPos(prev => ({ ...prev, visible: false }));
-    setRowButtonPos(prev => ({ ...prev, visible: false }));
-  };
-
-  const handleButtonMouseEnter = () => {
-    if (tableHoverTimeoutRef.current) {
-      clearTimeout(tableHoverTimeoutRef.current);
-      tableHoverTimeoutRef.current = null;
-    }
-  };
-
-  const handleButtonMouseLeave = () => {
-    tableHoverTimeoutRef.current = setTimeout(() => {
-      setColButtonPos(prev => ({ ...prev, visible: false }));
-      setRowButtonPos(prev => ({ ...prev, visible: false }));
-      setHoveredCell(null);
-      setHoveredTable(null);
-    }, 300);
-  };
 
   const triggerImageUpload = () => {
     const input = document.createElement('input');
@@ -488,6 +454,208 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     }
   };
 
+  const handleMoveColumn = (direction) => {
+    if (!editor || !activeCellElement) return;
+    const colIndex = activeCellElement.cellIndex;
+    const table = activeCellElement.closest('table');
+    if (!table) return;
+    const colCount = table.rows[0].cells.length;
+    
+    const targetIndex = direction === 'left' ? colIndex - 1 : colIndex + 1;
+    if (targetIndex < 0 || targetIndex >= colCount) return;
+
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+
+    let tablePos = null;
+    let tableNode = null;
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type.name === 'table') {
+        tablePos = $from.before(d);
+        tableNode = $from.node(d);
+        break;
+      }
+    }
+
+    if (tablePos === null || !tableNode) return;
+
+    const tr = state.tr;
+    const newRows = [];
+    tableNode.forEach((rowNode) => {
+      const cells = [];
+      rowNode.forEach((cellNode) => {
+        cells.push(cellNode);
+      });
+      if (colIndex < cells.length && targetIndex < cells.length) {
+        const temp = cells[colIndex];
+        cells[colIndex] = cells[targetIndex];
+        cells[targetIndex] = temp;
+      }
+      const newRow = rowNode.type.create(rowNode.attrs, cells);
+      newRows.push(newRow);
+    });
+
+    const newTable = tableNode.type.create(tableNode.attrs, newRows);
+    tr.replaceWith(tablePos, tablePos + tableNode.nodeSize, newTable);
+    editor.view.dispatch(tr);
+    
+    setTimeout(() => {
+      if (!editor || editor.isDestroyed) return;
+      const updatedTable = editor.view.dom.querySelector('table');
+      if (updatedTable && activeCellElement.parentNode) {
+        const row = updatedTable.rows[activeCellElement.parentNode.rowIndex];
+        if (row && row.cells[targetIndex]) {
+          selectCell(row.cells[targetIndex]);
+        }
+      }
+    }, 50);
+  };
+
+  const handleMoveRow = (direction) => {
+    if (!editor || !activeCellElement) return;
+    const trElement = activeCellElement.closest('tr');
+    if (!trElement) return;
+    const rowIndex = trElement.rowIndex;
+    const table = activeCellElement.closest('table');
+    if (!table) return;
+    const rowCount = table.rows.length;
+    
+    const targetIndex = direction === 'up' ? rowIndex - 1 : rowIndex + 1;
+    if (targetIndex < 0 || targetIndex >= rowCount) return;
+
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+
+    let tablePos = null;
+    let tableNode = null;
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type.name === 'table') {
+        tablePos = $from.before(d);
+        tableNode = $from.node(d);
+        break;
+      }
+    }
+
+    if (tablePos === null || !tableNode) return;
+
+    const tr = state.tr;
+    const rows = [];
+    tableNode.forEach((rowNode) => {
+      rows.push(rowNode);
+    });
+
+    if (rowIndex < rows.length && targetIndex < rows.length) {
+      const temp = rows[rowIndex];
+      rows[rowIndex] = rows[targetIndex];
+      rows[targetIndex] = temp;
+    }
+
+    const newTable = tableNode.type.create(tableNode.attrs, rows);
+    tr.replaceWith(tablePos, tablePos + tableNode.nodeSize, newTable);
+    editor.view.dispatch(tr);
+
+    setTimeout(() => {
+      if (!editor || editor.isDestroyed) return;
+      const updatedTable = editor.view.dom.querySelector('table');
+      if (updatedTable) {
+        const row = updatedTable.rows[targetIndex];
+        if (row && row.cells[activeCellElement.cellIndex]) {
+          selectCell(row.cells[activeCellElement.cellIndex]);
+        }
+      }
+    }, 50);
+  };
+
+  const handleSetColumnColor = (color) => {
+    if (!editor || !activeCellElement) return;
+    const colIndex = activeCellElement.cellIndex;
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+
+    let tablePos = null;
+    let tableNode = null;
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type.name === 'table') {
+        tablePos = $from.before(d);
+        tableNode = $from.node(d);
+        break;
+      }
+    }
+
+    if (tablePos === null || !tableNode) return;
+
+    const tr = state.tr;
+    const newRows = [];
+    tableNode.forEach((rowNode) => {
+      const cells = [];
+      rowNode.forEach((cellNode, index) => {
+        if (index === colIndex) {
+          const newCell = cellNode.type.create({
+            ...cellNode.attrs,
+            background: color
+          }, cellNode.content);
+          cells.push(newCell);
+        } else {
+          cells.push(cellNode);
+        }
+      });
+      const newRow = rowNode.type.create(rowNode.attrs, cells);
+      newRows.push(newRow);
+    });
+
+    const newTable = tableNode.type.create(tableNode.attrs, newRows);
+    tr.replaceWith(tablePos, tablePos + tableNode.nodeSize, newTable);
+    editor.view.dispatch(tr);
+  };
+
+  const handleSetRowColor = (color) => {
+    if (!editor || !activeCellElement) return;
+    const trElement = activeCellElement.closest('tr');
+    if (!trElement) return;
+    const rowIndex = trElement.rowIndex;
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+
+    let tablePos = null;
+    let tableNode = null;
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type.name === 'table') {
+        tablePos = $from.before(d);
+        tableNode = $from.node(d);
+        break;
+      }
+    }
+
+    if (tablePos === null || !tableNode) return;
+
+    const tr = state.tr;
+    const newRows = [];
+    tableNode.forEach((rowNode, index) => {
+      if (index === rowIndex) {
+        const cells = [];
+        rowNode.forEach((cellNode) => {
+          const newCell = cellNode.type.create({
+            ...cellNode.attrs,
+            background: color
+          }, cellNode.content);
+          cells.push(newCell);
+        });
+        const newRow = rowNode.type.create(rowNode.attrs, cells);
+        newRows.push(newRow);
+      } else {
+        newRows.push(rowNode);
+      }
+    });
+
+    const newTable = tableNode.type.create(tableNode.attrs, newRows);
+    tr.replaceWith(tablePos, tablePos + tableNode.nodeSize, newTable);
+    editor.view.dispatch(tr);
+  };
+
   // Close context menu on outside click or right-click
   useEffect(() => {
     const closeMenu = () => {
@@ -583,31 +751,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     setShowEmojiMenu(false);
   };
 
-  const checkActiveCell = (editor) => {
-    setTimeout(() => {
-      const cell = getSelectedCellElement();
-      if (cell) {
-        setActiveCell(cell);
-        const wrapper = editor.view.dom.closest('.rich-text-editor-container');
-        if (wrapper) {
-          const cellRect = cell.getBoundingClientRect();
-          const wrapperRect = wrapper.getBoundingClientRect();
-          
-          const left = cellRect.left - wrapperRect.left + wrapper.scrollLeft + (cellRect.width / 2) - 130;
-          const top = cellRect.top - wrapperRect.top + wrapper.scrollTop - 42;
-          
-          setTableToolbarPos({
-            left: Math.max(8, left),
-            top: top > 0 ? top : cellRect.bottom - wrapperRect.top + wrapper.scrollTop + 8,
-            visible: true
-          });
-        }
-      } else {
-        setActiveCell(null);
-        setTableToolbarPos(prev => ({ ...prev, visible: false }));
-      }
-    }, 0);
-  };
+
 
   const checkEmptyLinePlusButton = (editor) => {
     const { state, view } = editor;
@@ -798,11 +942,11 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     },
     onSelectionUpdate({ editor }) {
       checkSuggestions(editor);
-      checkActiveCell(editor);
       checkEmptyLinePlusButton(editor);
       setShowColorPicker(false);
       setShowHighlightPicker(false);
     },
+
   });
 
   // Sync value changes from parent without losing cursor position
@@ -815,64 +959,18 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     }
   }, [value, editor]);
 
-  // Bind mouse move and context menu events to Tiptap view DOM
   useEffect(() => {
     if (!editor) return;
     const viewDom = editor.view.dom;
 
-    const handleMouseMove = (e) => {
-      const cell = e.target.closest('td, th');
-      const table = e.target.closest('table');
-      const wrapper = viewDom.closest('.rich-text-editor-container');
-      
-      if (cell && table && wrapper) {
-        if (tableHoverTimeoutRef.current) {
-          clearTimeout(tableHoverTimeoutRef.current);
-          tableHoverTimeoutRef.current = null;
-        }
-
-        setHoveredTable(table);
-        setHoveredCell(cell);
-
-        const tableRect = table.getBoundingClientRect();
-        const wrapperRect = wrapper.getBoundingClientRect();
-
-        const tableLeft = tableRect.left - wrapperRect.left + wrapper.scrollLeft;
-        const tableTop = tableRect.top - wrapperRect.top + wrapper.scrollTop;
-
-        setColButtonPos({
-          left: tableLeft + tableRect.width + 4,
-          top: tableTop + (tableRect.height / 2) - 12,
-          visible: true
-        });
-
-        setRowButtonPos({
-          left: tableLeft + (tableRect.width / 2) - 12,
-          top: tableTop + tableRect.height + 4,
-          visible: true
-        });
-      } else {
-        if (!tableHoverTimeoutRef.current) {
-          tableHoverTimeoutRef.current = setTimeout(() => {
-            setColButtonPos(prev => ({ ...prev, visible: false }));
-            setRowButtonPos(prev => ({ ...prev, visible: false }));
-            setHoveredCell(null);
-            setHoveredTable(null);
-          }, 300);
-        }
-      }
+    const checkCell = () => {
+      const cell = getSelectedCellElement();
+      setActiveCellElement(cell);
     };
 
-    const handleMouseLeave = () => {
-      if (!tableHoverTimeoutRef.current) {
-        tableHoverTimeoutRef.current = setTimeout(() => {
-          setColButtonPos(prev => ({ ...prev, visible: false }));
-          setRowButtonPos(prev => ({ ...prev, visible: false }));
-          setHoveredCell(null);
-          setHoveredTable(null);
-        }, 300);
-      }
-    };
+    editor.on('selectionUpdate', checkCell);
+    editor.on('update', checkCell);
+    editor.on('focus', checkCell);
 
     const handleNativeContextMenu = (e) => {
       const wrapper = viewDom.closest('.rich-text-editor-container');
@@ -944,24 +1042,26 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       }
     };
 
-    viewDom.addEventListener('mousemove', handleMouseMove);
-    viewDom.addEventListener('mouseleave', handleMouseLeave);
-    window.addEventListener('scroll', handleMouseLeave, true);
+    const handleOutsideClick = () => {
+      setShowColMenu(false);
+      setShowRowMenu(false);
+    };
+
     viewDom.addEventListener('contextmenu', handleNativeContextMenu);
     viewDom.addEventListener('paste', handlePaste, true);
     viewDom.addEventListener('copy', handleCopy);
+    window.addEventListener('click', handleOutsideClick);
 
     return () => {
-      viewDom.removeEventListener('mousemove', handleMouseMove);
-      viewDom.removeEventListener('mouseleave', handleMouseLeave);
-      window.removeEventListener('scroll', handleMouseLeave, true);
+      editor.off('selectionUpdate', checkCell);
+      editor.off('update', checkCell);
+      editor.off('focus', checkCell);
+      window.removeEventListener('click', handleOutsideClick);
       viewDom.removeEventListener('contextmenu', handleNativeContextMenu);
       viewDom.removeEventListener('paste', handlePaste, true);
       viewDom.removeEventListener('copy', handleCopy);
-      if (tableHoverTimeoutRef.current) clearTimeout(tableHoverTimeoutRef.current);
     };
   }, [editor]);
-
   const selectHashOption = (taskItem) => {
     if (!editor) return;
     const { state } = editor;
@@ -1170,6 +1270,38 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       );
     });
   };
+  let colHandleStyle = null;
+  let rowHandleStyle = null;
+  let wrapper = null;
+  let table = null;
+
+  if (editor && activeCellElement) {
+    wrapper = editor.view.dom.closest('.rich-text-editor-container');
+    table = activeCellElement.closest('table');
+    if (wrapper && table) {
+      const cellRect = activeCellElement.getBoundingClientRect();
+      const tableRect = table.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
+
+      colHandleStyle = {
+        position: 'absolute',
+        left: cellRect.left - wrapperRect.left + wrapper.scrollLeft,
+        top: tableRect.top - wrapperRect.top + wrapper.scrollTop - 18,
+        width: cellRect.width,
+        height: 14,
+        zIndex: 50,
+      };
+
+      rowHandleStyle = {
+        position: 'absolute',
+        left: tableRect.left - wrapperRect.left + wrapper.scrollLeft - 18,
+        top: cellRect.top - wrapperRect.top + wrapper.scrollTop,
+        width: 14,
+        height: cellRect.height,
+        zIndex: 50,
+      };
+    }
+  }
 
   return (
     <div 
@@ -1370,100 +1502,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         </BubbleMenu>
       )}
 
-      <button
-        className={`table-hover-add-btn col-add-btn ${colButtonPos.visible ? 'visible' : ''}`}
-        style={{
-          position: 'absolute',
-          left: colButtonPos.left,
-          top: colButtonPos.top,
-          zIndex: 1000
-        }}
-        onMouseEnter={handleButtonMouseEnter}
-        onMouseLeave={handleButtonMouseLeave}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => addColumnAtHover(hoveredCell)}
-        title="Agregar columna a la derecha"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
 
-      <button
-        className={`table-hover-add-btn row-add-btn ${rowButtonPos.visible ? 'visible' : ''}`}
-        style={{
-          position: 'absolute',
-          left: rowButtonPos.left,
-          top: rowButtonPos.top,
-          zIndex: 1000
-        }}
-        onMouseEnter={handleButtonMouseEnter}
-        onMouseLeave={handleButtonMouseLeave}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => addRowAtHover(hoveredCell)}
-        title="Agregar fila abajo"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
-
-      {tableToolbarPos.visible && activeCell && (
-        <div
-          className="table-bubble-toolbar"
-          style={{
-            position: 'absolute',
-            left: tableToolbarPos.left,
-            top: tableToolbarPos.top,
-            zIndex: 10005
-          }}
-        >
-          <button
-            className="table-bubble-btn"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleTableAction('insertRowBelow')}
-            title="Insertar fila abajo"
-          >
-            <span>+ Fila</span>
-          </button>
-          <button
-            className="table-bubble-btn"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleTableAction('deleteRow')}
-            title="Eliminar fila actual"
-          >
-            <span>- Fila</span>
-          </button>
-          <div className="table-bubble-divider" />
-          <button
-            className="table-bubble-btn"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleTableAction('insertColumnRight')}
-            title="Insertar columna a la derecha"
-          >
-            <span>+ Col</span>
-          </button>
-          <button
-            className="table-bubble-btn"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleTableAction('deleteColumn')}
-            title="Eliminar columna actual"
-          >
-            <span>- Col</span>
-          </button>
-          <div className="table-bubble-divider" />
-          <button
-            className="table-bubble-btn danger"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleTableAction('deleteTable')}
-            title="Eliminar tabla completa"
-          >
-            <span>🗑️ Tabla</span>
-          </button>
-        </div>
-      )}
 
       {showContextMenu && (
         <div 
@@ -1669,6 +1708,183 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Column Handle Widget */}
+      {colHandleStyle && (
+        <div
+          className="table-handle-btn col-handle-btn"
+          style={{
+            ...colHandleStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--accent-hover, #7c3aed)',
+            color: '#ffffff',
+            borderRadius: '4px 4px 0 0',
+            cursor: 'pointer',
+            fontSize: '11px',
+            lineHeight: '1',
+            boxShadow: '0 -2px 6px rgba(124, 58, 237, 0.25)',
+            userSelect: 'none',
+            letterSpacing: '1px'
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowColMenu(prev => !prev);
+            setShowRowMenu(false);
+          }}
+          title="Opciones de columna"
+        >
+          •••
+        </div>
+      )}
+
+      {/* Row Handle Widget */}
+      {rowHandleStyle && (
+        <div
+          className="table-handle-btn row-handle-btn"
+          style={{
+            ...rowHandleStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--accent-hover, #7c3aed)',
+            color: '#ffffff',
+            borderRadius: '4px 0 0 4px',
+            cursor: 'pointer',
+            fontSize: '11px',
+            lineHeight: '1',
+            boxShadow: '-2px 0 6px rgba(124, 58, 237, 0.25)',
+            userSelect: 'none',
+            writingMode: 'vertical-lr',
+            letterSpacing: '1px'
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowRowMenu(prev => !prev);
+            setShowColMenu(false);
+          }}
+          title="Opciones de fila"
+        >
+          •••
+        </div>
+      )}
+
+      {/* Column Dropdown Menu */}
+      {showColMenu && colHandleStyle && (
+        <div
+          className="editor-context-menu table-handle-menu-dropdown"
+          style={{
+            position: 'absolute',
+            top: colHandleStyle.top + colHandleStyle.height + 4,
+            left: Math.max(8, colHandleStyle.left),
+            zIndex: 10010,
+            minWidth: '180px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="context-menu-item" onClick={() => { handleMoveColumn('left'); setShowColMenu(false); }}>
+            <span>← Move column left</span>
+          </div>
+          <div className="context-menu-item" onClick={() => { handleMoveColumn('right'); setShowColMenu(false); }}>
+            <span>→ Move column right</span>
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={() => { editor.chain().focus().addColumnBefore().run(); setShowColMenu(false); }}>
+            <span>+|| Insert column left</span>
+          </div>
+          <div className="context-menu-item" onClick={() => { editor.chain().focus().addColumnAfter().run(); setShowColMenu(false); }}>
+            <span>||+ Insert column right</span>
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-submenu-header">
+            <span>🎨 Color</span>
+            <div className="context-menu-submenu" style={{ minWidth: '120px' }}>
+              {[
+                { name: 'Predeterminado', color: 'transparent' },
+                { name: 'Rojo', color: 'rgba(239, 68, 68, 0.15)' },
+                { name: 'Naranja', color: 'rgba(249, 115, 22, 0.15)' },
+                { name: 'Amarillo', color: 'rgba(234, 179, 8, 0.15)' },
+                { name: 'Verde', color: 'rgba(34, 197, 94, 0.15)' },
+                { name: 'Azul', color: 'rgba(59, 130, 246, 0.15)' },
+                { name: 'Violeta', color: 'rgba(168, 85, 247, 0.15)' },
+                { name: 'Gris', color: 'rgba(156, 163, 175, 0.15)' }
+              ].map(c => (
+                <div
+                  key={c.name}
+                  className="context-menu-item"
+                  onClick={() => { handleSetColumnColor(c.color); setShowColMenu(false); }}
+                >
+                  <div className="color-circle" style={{ backgroundColor: c.color === 'transparent' ? 'rgba(255,255,255,0.1)' : c.color, border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <span>{c.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item danger" onClick={() => { editor.chain().focus().deleteColumn().run(); setShowColMenu(false); }}>
+            <span>🗑️ Delete column</span>
+          </div>
+        </div>
+      )}
+
+      {/* Row Dropdown Menu */}
+      {showRowMenu && rowHandleStyle && (
+        <div
+          className="editor-context-menu table-handle-menu-dropdown"
+          style={{
+            position: 'absolute',
+            top: rowHandleStyle.top,
+            left: rowHandleStyle.left + rowHandleStyle.width + 4,
+            zIndex: 10010,
+            minWidth: '180px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="context-menu-item" onClick={() => { handleMoveRow('up'); setShowRowMenu(false); }}>
+            <span>↑ Move row up</span>
+          </div>
+          <div className="context-menu-item" onClick={() => { handleMoveRow('down'); setShowRowMenu(false); }}>
+            <span>↓ Move row down</span>
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={() => { editor.chain().focus().addRowBefore().run(); setShowRowMenu(false); }}>
+            <span>+ Insert row above</span>
+          </div>
+          <div className="context-menu-item" onClick={() => { editor.chain().focus().addRowAfter().run(); setShowRowMenu(false); }}>
+            <span>+ Insert row below</span>
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-submenu-header">
+            <span>🎨 Color</span>
+            <div className="context-menu-submenu" style={{ minWidth: '120px' }}>
+              {[
+                { name: 'Predeterminado', color: 'transparent' },
+                { name: 'Rojo', color: 'rgba(239, 68, 68, 0.15)' },
+                { name: 'Naranja', color: 'rgba(249, 115, 22, 0.15)' },
+                { name: 'Amarillo', color: 'rgba(234, 179, 8, 0.15)' },
+                { name: 'Verde', color: 'rgba(34, 197, 94, 0.15)' },
+                { name: 'Azul', color: 'rgba(59, 130, 246, 0.15)' },
+                { name: 'Violeta', color: 'rgba(168, 85, 247, 0.15)' },
+                { name: 'Gris', color: 'rgba(156, 163, 175, 0.15)' }
+              ].map(c => (
+                <div
+                  key={c.name}
+                  className="context-menu-item"
+                  onClick={() => { handleSetRowColor(c.color); setShowRowMenu(false); }}
+                >
+                  <div className="color-circle" style={{ backgroundColor: c.color === 'transparent' ? 'rgba(255,255,255,0.1)' : c.color, border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <span>{c.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item danger" onClick={() => { editor.chain().focus().deleteRow().run(); setShowRowMenu(false); }}>
+            <span>🗑️ Delete row</span>
+          </div>
         </div>
       )}
     </div>
