@@ -25,10 +25,12 @@ const ProjectKanbanView = lazy(() => import('./components/ProjectKanbanView').th
 const AddTaskWidget = lazy(() => import('./components/AddTaskWidget').then(m => ({ default: m.AddTaskWidget })));
 const CompletedView = lazy(() => import('./components/CompletedView').then(m => ({ default: m.CompletedView })));
 
-import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff, SlidersHorizontal, Menu, CheckSquare, CalendarDays, Timer, BarChart2 } from 'lucide-react';
-import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
-import { useTodo } from './context/TodoContext';
+import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff, SlidersHorizontal, Menu, CheckSquare, CalendarDays, Timer, BarChart2, Calendar, Flag, Tag, Sun, Sunrise, Compass, Clock } from 'lucide-react';
+import { isToday, isFuture, parseISO, format, addDays, addMonths } from 'date-fns';
+import { useTodo, parseNLPQuickAdd } from './context/TodoContext';
 import { parseTimezoneOffset } from './utils/timezone';
+
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function App() {
   const {
@@ -131,6 +133,346 @@ function App() {
 
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('showFilters') === 'true');
   const [activeDragSectionId, setActiveDragSectionId] = useState(null);
+
+  const [quickAddDueDate, setQuickAddDueDate] = useState(null);
+  const [quickAddStartTime, setQuickAddStartTime] = useState('');
+  const [quickAddEndTime, setQuickAddEndTime] = useState('');
+  const [quickAddDeadlineDate, setQuickAddDeadlineDate] = useState('');
+  const [quickAddEstimatedEffort, setQuickAddEstimatedEffort] = useState(0);
+
+  const [quickAddDateTab, setQuickAddDateTab] = useState('date'); // 'date' | 'duration' | 'deadline'
+  const [quickAddAllDay, setQuickAddAllDay] = useState(true);
+  const [quickAddHasTime, setQuickAddHasTime] = useState(false);
+  const [quickAddStartHour, setQuickAddStartHour] = useState('09');
+  const [quickAddStartMin, setQuickAddStartMin] = useState('00');
+  const [quickAddEndHour, setQuickAddEndHour] = useState('10');
+  const [quickAddEndMin, setQuickAddEndMin] = useState('00');
+
+  const [quickAddCalendarDate, setQuickAddCalendarDate] = useState(new Date());
+
+  const [quickAddPriority, setQuickAddPriority] = useState(null);
+  const [quickAddTags, setQuickAddTags] = useState([]);
+  const [activeQuickAddPopover, setActiveQuickAddPopover] = useState(null);
+  const quickAddPopoverRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (activeQuickAddPopover && quickAddPopoverRef.current && !quickAddPopoverRef.current.contains(e.target)) {
+        setActiveQuickAddPopover(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [activeQuickAddPopover]);
+
+  const generateQuickAddCalendarDays = () => {
+    const year = quickAddCalendarDate.getFullYear();
+    const month = quickAddCalendarDate.getMonth();
+    
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const prevTotalDays = new Date(year, month, 0).getDate();
+
+    const days = [];
+
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      days.push({
+        day: prevTotalDays - i,
+        isCurrentMonth: false,
+        date: new Date(year, month - 1, prevTotalDays - i)
+      });
+    }
+
+    for (let i = 1; i <= totalDays; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: true,
+        date: new Date(year, month, i)
+      });
+    }
+
+    const remainingSlots = 42 - days.length;
+    for (let i = 1; i <= remainingSlots; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: false,
+        date: new Date(year, month + 1, i)
+      });
+    }
+
+    return days;
+  };
+
+  const handleQuickAddQuickSelect = (type) => {
+    const today = new Date();
+    let selectedDate = today;
+
+    if (type === 'today') {
+      selectedDate = today;
+    } else if (type === 'tomorrow') {
+      selectedDate = addDays(today, 1);
+    } else if (type === 'nextWeek') {
+      selectedDate = addDays(today, 7);
+    } else if (type === 'nextMonth') {
+      selectedDate = addMonths(today, 1);
+    }
+
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    setQuickAddDueDate(formattedDate);
+    const newStartStr = quickAddHasTime ? `${formattedDate}T${quickAddStartHour}:${quickAddStartMin}` : formattedDate;
+    setQuickAddStartTime(newStartStr);
+    setQuickAddEndTime(newStartStr);
+  };
+
+  const handleQuickAddCalendarDayClick = (dateObj) => {
+    const formattedDate = format(dateObj, 'yyyy-MM-dd');
+    if (quickAddDateTab === 'date') {
+      setQuickAddDueDate(formattedDate);
+      if (quickAddHasTime) {
+        const newStart = `${formattedDate}T${quickAddStartHour}:${quickAddStartMin}`;
+        if (quickAddStartTime && quickAddEndTime) {
+          try {
+            const startD = parseISO(quickAddStartTime.includes('T') ? quickAddStartTime : `${quickAddStartTime}T00:00`);
+            const endD = parseISO(quickAddEndTime.includes('T') ? quickAddEndTime : `${quickAddEndTime}T00:00`);
+            const diffMs = endD.getTime() - startD.getTime();
+            const newStartD = parseISO(newStart);
+            const newEndD = new Date(newStartD.getTime() + diffMs);
+            const newEnd = `${format(newEndD, 'yyyy-MM-dd')}T${quickAddEndHour}:${quickAddEndMin}`;
+            setQuickAddStartTime(newStart);
+            setQuickAddEndTime(newEnd);
+          } catch (e) {
+            setQuickAddStartTime(newStart);
+            setQuickAddEndTime(`${formattedDate}T${quickAddEndHour}:${quickAddEndMin}`);
+          }
+        } else {
+          setQuickAddStartTime(newStart);
+          setQuickAddEndTime(`${formattedDate}T${quickAddEndHour}:${quickAddEndMin}`);
+        }
+      } else {
+        if (quickAddStartTime && quickAddEndTime) {
+          try {
+            const startD = parseISO(quickAddStartTime.includes('T') ? quickAddStartTime.split('T')[0] : quickAddStartTime);
+            const endD = parseISO(quickAddEndTime.includes('T') ? quickAddEndTime.split('T')[0] : quickAddEndTime);
+            const diffMs = endD.getTime() - startD.getTime();
+            const newStartD = parseISO(formattedDate);
+            const newEndD = new Date(newStartD.getTime() + diffMs);
+            const newEnd = format(newEndD, 'yyyy-MM-dd');
+            setQuickAddStartTime(formattedDate);
+            setQuickAddEndTime(newEnd);
+          } catch (e) {
+            setQuickAddStartTime(formattedDate);
+            setQuickAddEndTime(formattedDate);
+          }
+        } else {
+          setQuickAddStartTime(formattedDate);
+          setQuickAddEndTime(formattedDate);
+        }
+      }
+    } else if (quickAddDateTab === 'deadline') {
+      setQuickAddDeadlineDate(formattedDate);
+    } else {
+      const currentStartDateStr = quickAddStartTime ? (quickAddStartTime.includes('T') ? quickAddStartTime.split('T')[0] : quickAddStartTime) : '';
+      const currentEndDateStr = quickAddEndTime ? (quickAddEndTime.includes('T') ? quickAddEndTime.split('T')[0] : quickAddEndTime) : '';
+      
+      if (!currentStartDateStr || (currentStartDateStr && currentEndDateStr)) {
+        const newStart = quickAddAllDay ? formattedDate : `${formattedDate}T${quickAddStartHour}:${quickAddStartMin}`;
+        setQuickAddStartTime(newStart);
+        setQuickAddEndTime('');
+        setQuickAddDueDate(formattedDate);
+      } else {
+        if (formattedDate >= currentStartDateStr) {
+          const newEnd = quickAddAllDay ? formattedDate : `${formattedDate}T${quickAddEndHour}:${quickAddEndMin}`;
+          setQuickAddEndTime(newEnd);
+          setQuickAddDueDate(currentStartDateStr);
+        } else {
+          const newStart = quickAddAllDay ? formattedDate : `${formattedDate}T${quickAddStartHour}:${quickAddStartMin}`;
+          setQuickAddStartTime(newStart);
+          setQuickAddEndTime('');
+          setQuickAddDueDate(formattedDate);
+        }
+      }
+    }
+  };
+
+  const handleQuickAddTimeChange = (h, m) => {
+    setQuickAddStartHour(h);
+    setQuickAddStartMin(m);
+    const datePart = quickAddDueDate || format(new Date(), 'yyyy-MM-dd');
+    const newStart = `${datePart}T${h}:${m}`;
+    setQuickAddStartTime(newStart);
+    if (quickAddEndTime) {
+      try {
+        const startD = parseISO(quickAddStartTime.includes('T') ? quickAddStartTime : `${quickAddStartTime}T00:00`);
+        const endD = parseISO(quickAddEndTime.includes('T') ? quickAddEndTime : `${quickAddEndTime}T00:00`);
+        const diffMs = endD.getTime() - startD.getTime();
+        const newStartD = parseISO(newStart);
+        const newEndD = new Date(newStartD.getTime() + diffMs);
+        setQuickAddEndTime(`${format(newEndD, 'yyyy-MM-dd')}T${quickAddEndHour}:${quickAddEndMin}`);
+      } catch (e) {
+        setQuickAddEndTime(`${datePart}T${quickAddEndHour}:${quickAddEndMin}`);
+      }
+    } else {
+      const hourNum = parseInt(h);
+      const nextHour = String((hourNum + 1) % 24).padStart(2, '0');
+      setQuickAddEndTime(`${datePart}T${nextHour}:${m}`);
+    }
+  };
+
+  const handleQuickAddStartTimeChange = (h, m) => {
+    setQuickAddStartHour(h);
+    setQuickAddStartMin(m);
+    const datePart = quickAddStartTime ? (quickAddStartTime.includes('T') ? quickAddStartTime.split('T')[0] : quickAddStartTime) : format(new Date(), 'yyyy-MM-dd');
+    setQuickAddStartTime(`${datePart}T${h}:${m}`);
+  };
+
+  const handleQuickAddEndTimeChange = (h, m) => {
+    setQuickAddEndHour(h);
+    setQuickAddEndMin(m);
+    const datePart = quickAddEndTime ? (quickAddEndTime.includes('T') ? quickAddEndTime.split('T')[0] : quickAddEndTime) : (quickAddStartTime ? (quickAddStartTime.includes('T') ? quickAddStartTime.split('T')[0] : quickAddStartTime) : format(new Date(), 'yyyy-MM-dd'));
+    setQuickAddEndTime(`${datePart}T${h}:${m}`);
+  };
+
+  const handleQuickAddAllDayToggle = (isAllDay) => {
+    setQuickAddAllDay(isAllDay);
+    setQuickAddHasTime(!isAllDay);
+    if (isAllDay) {
+      if (quickAddStartTime) setQuickAddStartTime(quickAddStartTime.split('T')[0]);
+      if (quickAddEndTime) setQuickAddEndTime(quickAddEndTime.split('T')[0]);
+    } else {
+      const sDate = quickAddStartTime ? (quickAddStartTime.includes('T') ? quickAddStartTime.split('T')[0] : quickAddStartTime) : (quickAddDueDate || format(new Date(), 'yyyy-MM-dd'));
+      const eDate = quickAddEndTime ? (quickAddEndTime.includes('T') ? quickAddEndTime.split('T')[0] : quickAddEndTime) : sDate;
+      setQuickAddStartTime(`${sDate}T${quickAddStartHour}:${quickAddStartMin}`);
+      setQuickAddEndTime(`${eDate}T${quickAddEndHour}:${quickAddEndMin}`);
+    }
+  };
+
+  const handleQuickAddApplyDates = () => {
+    if (quickAddDateTab === 'date') {
+      if (quickAddDueDate) {
+        let finalStartTime = null;
+        let finalEndTime = null;
+        if (quickAddHasTime) {
+          finalStartTime = `${quickAddDueDate}T${quickAddStartHour}:${quickAddStartMin}`;
+          if (quickAddEndTime && (quickAddEndTime.startsWith(quickAddDueDate) || quickAddEndTime.includes('T'))) {
+            finalEndTime = quickAddEndTime;
+          } else {
+            const hourNum = parseInt(quickAddStartHour);
+            const nextHour = String((hourNum + 1) % 24).padStart(2, '0');
+            const nextDayOffset = hourNum + 1 >= 24;
+            let finalEndDay = quickAddDueDate;
+            if (nextDayOffset) {
+              try {
+                finalEndDay = format(addDays(parseISO(quickAddDueDate), 1), 'yyyy-MM-dd');
+              } catch (e) {}
+            }
+            finalEndTime = `${finalEndDay}T${nextHour}:${quickAddStartMin}`;
+          }
+        } else {
+          finalStartTime = quickAddDueDate;
+          finalEndTime = quickAddDueDate;
+        }
+        setQuickAddStartTime(finalStartTime);
+        setQuickAddEndTime(finalEndTime);
+      }
+    } else if (quickAddDateTab === 'deadline') {
+      // Handled in setQuickAddDeadlineDate
+    } else {
+      if (quickAddStartTime) {
+        const derivedDueDate = quickAddStartTime.split('T')[0];
+        setQuickAddDueDate(derivedDueDate);
+      }
+    }
+    setActiveQuickAddPopover(null);
+  };
+
+  const handleQuickAddClearDates = () => {
+    if (quickAddDateTab === 'deadline') {
+      setQuickAddDeadlineDate('');
+      setQuickAddEstimatedEffort(0);
+    } else {
+      setQuickAddDueDate(null);
+      setQuickAddStartTime('');
+      setQuickAddEndTime('');
+      setQuickAddHasTime(false);
+    }
+    setActiveQuickAddPopover(null);
+  };
+
+  const renderQuickAddTimeSelector = (hourVal, minVal, onHourChange, onMinChange) => {
+    const hoursArray = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+    const minutesArray = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
+    return (
+      <div className="custom-time-picker">
+        <select 
+          value={hourVal} 
+          onChange={(e) => onHourChange(e.target.value)}
+          className="time-select"
+        >
+          {hoursArray.map(h => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <span className="time-separator">:</span>
+        <select 
+          value={minVal} 
+          onChange={(e) => onMinChange(e.target.value)}
+          className="time-select"
+        >
+          {minutesArray.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
+  const onSubmitQuickAdd = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!quickAddTitle.trim()) return;
+
+    const parsedTaskData = parseNLPQuickAdd(quickAddTitle, lists, activeList);
+    let mergedData = { ...parsedTaskData };
+
+    if (quickAddDueDate !== null) {
+      mergedData.due_date = quickAddDueDate === 'none' ? null : quickAddDueDate;
+      mergedData.start_time = quickAddStartTime || null;
+      mergedData.end_time = quickAddEndTime || null;
+    }
+
+    if (quickAddDeadlineDate) {
+      mergedData.deadline_date = quickAddDeadlineDate;
+      mergedData.estimated_effort = parseFloat(quickAddEstimatedEffort) || 0;
+    }
+
+    if (quickAddPriority !== null) {
+      mergedData.priority = quickAddPriority;
+    }
+
+    if (quickAddTags.length > 0) {
+      mergedData.tags = Array.from(new Set([...mergedData.tags, ...quickAddTags]));
+    }
+
+    const targetList = lists.find(l => l.id === mergedData.list_id);
+    if (targetList && targetList.type === 'note') {
+      mergedData.type = 'note';
+    }
+
+    try {
+      await handleAddTask(mergedData);
+      setQuickAddTitle('');
+      setQuickAddDueDate(null);
+      setQuickAddStartTime('');
+      setQuickAddEndTime('');
+      setQuickAddDeadlineDate('');
+      setQuickAddEstimatedEffort(0);
+      setQuickAddPriority(null);
+      setQuickAddTags([]);
+      setActiveQuickAddPopover(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -793,8 +1135,38 @@ function App() {
                 </header>
               )}
 
-              <form className="quick-add-bar" onSubmit={handleQuickAdd} style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+              <form className="quick-add-bar" onSubmit={onSubmitQuickAdd} style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
                 <Plus size={18} className="quick-add-icon" />
+
+                {/* Active Attribute Pills */}
+                {quickAddDueDate && (
+                  <div className="quick-add-pill date-pill">
+                    <Calendar size={12} />
+                    <span>{quickAddDueDate === 'none' ? 'Sin fecha' : quickAddDueDate}</span>
+                    <button type="button" onClick={() => setQuickAddDueDate(null)} title="Eliminar fecha">
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
+                {quickAddPriority !== null && (
+                  <div className={`quick-add-pill priority-pill priority-${quickAddPriority}`}>
+                    <Flag size={12} fill="currentColor" />
+                    <span>P{quickAddPriority}</span>
+                    <button type="button" onClick={() => setQuickAddPriority(null)} title="Eliminar prioridad">
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
+                {quickAddTags.map(tagName => (
+                  <div key={tagName} className="quick-add-pill tag-pill">
+                    <Tag size={10} style={{ marginRight: '2px' }} />
+                    <span>#{tagName}</span>
+                    <button type="button" onClick={() => setQuickAddTags(prev => prev.filter(t => t !== tagName))} title={`Eliminar etiqueta ${tagName}`}>
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+
                 <input 
                   type="text" 
                   placeholder={isActiveListNote ? "Añadir Nota..." : "Add Task"} 
@@ -802,7 +1174,394 @@ function App() {
                   onChange={e => setQuickAddTitle(e.target.value)}
                   style={{ flex: 1 }}
                 />
-                
+
+                {/* Interactive Attributes Picker Buttons */}
+                {!isActiveListNote && (
+                  <div className="quick-add-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }} ref={quickAddPopoverRef}>
+                    {/* Calendar Button */}
+                    <button
+                      type="button"
+                      className={`quick-add-action-btn ${activeQuickAddPopover === 'date' ? 'active' : ''}`}
+                      onClick={() => setActiveQuickAddPopover(activeQuickAddPopover === 'date' ? null : 'date')}
+                      title="Asignar fecha"
+                    >
+                      <Calendar size={16} />
+                    </button>
+
+                    {/* Priority Button */}
+                    <button
+                      type="button"
+                      className={`quick-add-action-btn ${activeQuickAddPopover === 'priority' ? 'active' : ''}`}
+                      onClick={() => setActiveQuickAddPopover(activeQuickAddPopover === 'priority' ? null : 'priority')}
+                      title="Asignar prioridad"
+                    >
+                      <Flag size={16} />
+                    </button>
+
+                    {/* Tags Button */}
+                    <button
+                      type="button"
+                      className={`quick-add-action-btn ${activeQuickAddPopover === 'tags' ? 'active' : ''}`}
+                      onClick={() => setActiveQuickAddPopover(activeQuickAddPopover === 'tags' ? null : 'tags')}
+                      title="Asignar etiquetas"
+                    >
+                      <Tag size={16} />
+                    </button>
+
+                    {/* Popover Menus */}
+                    {activeQuickAddPopover === 'date' && (
+                      <div className="date-picker-popover" style={{ top: '110%', right: '0px', left: 'auto', zIndex: 120 }}>
+                        {/* Tabs */}
+                        <div className="popover-tabs">
+                          <button 
+                            type="button"
+                            className={`popover-tab-btn ${quickAddDateTab === 'date' ? 'active' : ''}`}
+                            onClick={() => setQuickAddDateTab('date')}
+                          >
+                            Fecha
+                          </button>
+                          <button 
+                            type="button"
+                            className={`popover-tab-btn ${quickAddDateTab === 'duration' ? 'active' : ''}`}
+                            onClick={() => setQuickAddDateTab('duration')}
+                          >
+                            Duración
+                          </button>
+                          <button 
+                            type="button"
+                            className={`popover-tab-btn ${quickAddDateTab === 'deadline' ? 'active' : ''}`}
+                            onClick={() => setQuickAddDateTab('deadline')}
+                          >
+                            Límite
+                          </button>
+                        </div>
+
+                        <div className="popover-body">
+                          {/* Shared Calendar Header */}
+                          <div className="mini-calendar-header">
+                            <span>{monthNames[quickAddCalendarDate.getMonth()]} {quickAddCalendarDate.getFullYear()}</span>
+                            <div className="mini-calendar-nav">
+                              <button 
+                                type="button"
+                                className="nav-arrow-btn"
+                                onClick={() => setQuickAddCalendarDate(new Date(quickAddCalendarDate.getFullYear(), quickAddCalendarDate.getMonth() - 1, 1))}
+                              >
+                                &lt;
+                              </button>
+                              <button 
+                                type="button"
+                                className="nav-arrow-btn"
+                                onClick={() => setQuickAddCalendarDate(new Date())}
+                              >
+                                o
+                              </button>
+                              <button 
+                                type="button"
+                                className="nav-arrow-btn"
+                                onClick={() => setQuickAddCalendarDate(new Date(quickAddCalendarDate.getFullYear(), quickAddCalendarDate.getMonth() + 1, 1))}
+                              >
+                                &gt;
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Weekday Names */}
+                          <div className="weekday-labels">
+                            <span>D</span><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span>
+                          </div>
+
+                          {/* Mini Calendar Grid */}
+                          <div className="mini-calendar-grid" style={{ marginBottom: '0.75rem' }}>
+                            {generateQuickAddCalendarDays().map((dayObj, index) => {
+                              const formattedCompare = format(dayObj.date, 'yyyy-MM-dd');
+                              const currentStartDateStr = quickAddStartTime ? quickAddStartTime.split('T')[0] : '';
+                              const currentEndDateStr = quickAddEndTime ? quickAddEndTime.split('T')[0] : '';
+
+                              const isRangeStart = quickAddDateTab === 'duration' && currentStartDateStr === formattedCompare;
+                              const isRangeEnd = quickAddDateTab === 'duration' && currentEndDateStr === formattedCompare;
+                              const isRangeBetween = quickAddDateTab === 'duration' && currentStartDateStr && currentEndDateStr && 
+                                                     formattedCompare > currentStartDateStr && formattedCompare < currentEndDateStr;
+
+                              const isSelected = quickAddDateTab === 'date' 
+                                ? (quickAddDueDate === formattedCompare) 
+                                : quickAddDateTab === 'deadline'
+                                  ? (quickAddDeadlineDate === formattedCompare)
+                                  : (isRangeStart || isRangeEnd);
+
+                              return (
+                                <button
+                                  type="button"
+                                  key={index}
+                                  onClick={() => handleQuickAddCalendarDayClick(dayObj.date)}
+                                  className={`calendar-grid-day ${!dayObj.isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''} ${isRangeStart ? 'range-start' : ''} ${isRangeEnd ? 'range-end' : ''} ${isRangeBetween ? 'range-between' : ''}`}
+                                >
+                                  {dayObj.day}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Tab-Specific Options */}
+                          {quickAddDateTab === 'date' && (
+                            <div className="date-tab-content">
+                              {/* Quick Select Panel */}
+                              <div className="quick-select-panel">
+                                <button type="button" className="quick-select-item" onClick={() => handleQuickAddQuickSelect('today')}>
+                                  <Sun size={15} />
+                                  <span>Hoy</span>
+                                </button>
+                                <button type="button" className="quick-select-item" onClick={() => handleQuickAddQuickSelect('tomorrow')}>
+                                  <Sunrise size={15} />
+                                  <span>Mañana</span>
+                                </button>
+                                <button type="button" className="quick-select-item" onClick={() => handleQuickAddQuickSelect('nextWeek')}>
+                                  <Compass size={15} />
+                                  <span>Siguiente semana</span>
+                                </button>
+                                <button type="button" className="quick-select-item" onClick={() => handleQuickAddQuickSelect('nextMonth')}>
+                                  <Clock size={15} />
+                                  <span>Siguiente mes</span>
+                                </button>
+                              </div>
+
+                              {/* Time Selector Row */}
+                              <div className="time-selector-row">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>🕒 Definir hora:</span>
+                                  <label className="toggle-switch">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={quickAddHasTime}
+                                      onChange={(e) => {
+                                        setQuickAddHasTime(e.target.checked);
+                                        if (e.target.checked) {
+                                          setQuickAddStartTime(`${quickAddDueDate || format(new Date(), 'yyyy-MM-dd')}T${quickAddStartHour}:${quickAddStartMin}`);
+                                        } else {
+                                          setQuickAddStartTime('');
+                                          setQuickAddEndTime('');
+                                        }
+                                      }}
+                                    />
+                                    <span className="slider round"></span>
+                                  </label>
+                                </div>
+                                {quickAddHasTime && renderQuickAddTimeSelector(
+                                  quickAddStartHour, 
+                                  quickAddStartMin, 
+                                  (h) => handleQuickAddTimeChange(h, quickAddStartMin), 
+                                  (m) => handleQuickAddTimeChange(quickAddStartHour, m)
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {quickAddDateTab === 'duration' && (
+                            <div className="duration-tab-content" style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
+                              {/* Resumen de Rango */}
+                              <div className="duration-range-summary" style={{ background: 'rgba(0,0,0,0.15)', borderRadius: '8px', padding: '10px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                  <span style={{ color: 'var(--text-secondary)' }}>📅 Inicio:</span>
+                                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                    {quickAddStartTime ? format(parseISO(quickAddStartTime.includes('T') ? quickAddStartTime : `${quickAddStartTime}T00:00`), 'dd MMM yyyy') : '--'}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                  <span style={{ color: 'var(--text-secondary)' }}>📅 Fin:</span>
+                                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                    {quickAddEndTime ? format(parseISO(quickAddEndTime.includes('T') ? quickAddEndTime : `${quickAddEndTime}T00:00`), 'dd MMM yyyy') : '--'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* All Day Toggle */}
+                              <div className="all-day-toggle-row" style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>🕒 Todo el día</span>
+                                <label className="toggle-switch">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={quickAddAllDay}
+                                    onChange={(e) => handleQuickAddAllDayToggle(e.target.checked)}
+                                  />
+                                  <span className="slider round"></span>
+                                </label>
+                              </div>
+
+                              {/* Custom Time Selection (if not all day) */}
+                              {!quickAddAllDay && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Hora de Inicio:</span>
+                                    {renderQuickAddTimeSelector(
+                                      quickAddStartHour, 
+                                      quickAddStartMin, 
+                                      (h) => handleQuickAddStartTimeChange(h, quickAddStartMin), 
+                                      (m) => handleQuickAddStartTimeChange(quickAddStartHour, m)
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Hora de Fin:</span>
+                                    {renderQuickAddTimeSelector(
+                                      quickAddEndHour, 
+                                      quickAddEndMin, 
+                                      (h) => handleQuickAddEndTimeChange(h, quickAddEndMin), 
+                                      (m) => handleQuickAddEndTimeChange(quickAddEndHour, m)
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {quickAddDateTab === 'deadline' && (
+                            <div className="deadline-tab-content" style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              {/* Summary of Deadline */}
+                              <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '8px', padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                                <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>🚨 Límite Estricto:</span>
+                                <span style={{ color: '#ef4444', fontWeight: 700 }}>
+                                  {quickAddDeadlineDate ? format(parseISO(quickAddDeadlineDate.includes('T') ? quickAddDeadlineDate : `${quickAddDeadlineDate}T00:00`), 'dd MMM yyyy') : 'Sin definir'}
+                                </span>
+                              </div>
+
+                              {/* Estimated Effort Input */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>⏱️ Esfuerzo Estimado:</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    value={quickAddEstimatedEffort}
+                                    onChange={(e) => setQuickAddEstimatedEffort(parseFloat(e.target.value) || 0)}
+                                    style={{
+                                      background: 'rgba(0,0,0,0.2)',
+                                      border: '1px solid var(--border-color)',
+                                      borderRadius: '6px',
+                                      color: 'var(--text-primary)',
+                                      padding: '4px 8px',
+                                      fontSize: '0.8rem',
+                                      width: '70px',
+                                      outline: 'none'
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>horas</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Popover Actions (OK, Clear) */}
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
+                            <button
+                              type="button"
+                              className="quick-select-item"
+                              style={{ padding: '4px 12px', background: 'transparent', borderColor: 'rgba(255,255,255,0.1)' }}
+                              onClick={handleQuickAddClearDates}
+                            >
+                              Limpiar
+                            </button>
+                            <button
+                              type="button"
+                              className="quick-select-item"
+                              style={{ padding: '4px 12px', background: 'var(--accent-hover)', color: '#ffffff', borderColor: 'transparent', fontWeight: 600 }}
+                              onClick={handleQuickAddApplyDates}
+                            >
+                              OK
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeQuickAddPopover === 'priority' && (
+                      <div className="quick-add-popover" style={{ right: '40px' }}>
+                        <button
+                          type="button"
+                          className="quick-add-popover-item"
+                          style={{ color: '#ef4444' }}
+                          onClick={() => {
+                            setQuickAddPriority(3);
+                            setActiveQuickAddPopover(null);
+                          }}
+                        >
+                          🔴 Alta (P3)
+                        </button>
+                        <button
+                          type="button"
+                          className="quick-add-popover-item"
+                          style={{ color: '#eab308' }}
+                          onClick={() => {
+                            setQuickAddPriority(2);
+                            setActiveQuickAddPopover(null);
+                          }}
+                        >
+                          🟡 Media (P2)
+                        </button>
+                        <button
+                          type="button"
+                          className="quick-add-popover-item"
+                          style={{ color: '#3b82f6' }}
+                          onClick={() => {
+                            setQuickAddPriority(1);
+                            setActiveQuickAddPopover(null);
+                          }}
+                        >
+                          🔵 Baja (P1)
+                        </button>
+                        <button
+                          type="button"
+                          className="quick-add-popover-item"
+                          onClick={() => {
+                            setQuickAddPriority(0);
+                            setActiveQuickAddPopover(null);
+                          }}
+                        >
+                          ⚪ Ninguna (P0)
+                        </button>
+                      </div>
+                    )}
+
+                    {activeQuickAddPopover === 'tags' && (
+                      <div className="quick-add-popover" style={{ right: '0px', minWidth: '160px', maxHeight: '220px', overflowY: 'auto' }}>
+                        <div style={{ padding: '4px 8px', fontSize: '0.75rem', color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '4px', fontWeight: 600 }}>
+                          Seleccionar etiquetas
+                        </div>
+                        {tags && tags.length > 0 ? (
+                          tags.map(t => {
+                            const isSelected = quickAddTags.includes(t.name.toLowerCase());
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                className="quick-add-popover-item"
+                                style={{
+                                  background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                                  color: isSelected ? '#10b981' : 'var(--text-secondary)',
+                                  justifyContent: 'space-between'
+                                }}
+                                onClick={() => {
+                                  const tagLower = t.name.toLowerCase();
+                                  if (isSelected) {
+                                    setQuickAddTags(prev => prev.filter(x => x !== tagLower));
+                                  } else {
+                                    setQuickAddTags(prev => [...prev, tagLower]);
+                                  }
+                                }}
+                              >
+                                <span>#{t.name}</span>
+                                {isSelected && <span>✓</span>}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div style={{ padding: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                            No hay etiquetas
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Microphone Button */}
                 <button
                   type="button"

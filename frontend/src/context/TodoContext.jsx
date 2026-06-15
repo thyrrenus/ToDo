@@ -42,7 +42,7 @@ window.fetch = async function (url, options = {}) {
 const TodoContext = createContext();
 
 // --- LOCAL NATURAL LANGUAGE PROCESSING (NLP) QUICK ADD PARSER ---
-function parseNLPQuickAdd(inputTitle, lists, activeList) {
+export function parseNLPQuickAdd(inputTitle, lists, activeList) {
   let title = inputTitle.trim();
   let priority = 0;
   
