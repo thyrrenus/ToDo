@@ -1068,6 +1068,8 @@ export function TaskDetail() {
     return null;
   };
 
+  if (!task && !subtask) return null;
+
   const conflict = getScheduleConflict();
 
   return (
@@ -1124,7 +1126,7 @@ export function TaskDetail() {
                 marginBottom: '1.25rem',
                 marginTop: '0.5rem'
               }}>
-                {task.type !== 'note' && (
+                {task && task.type !== 'note' && (
                   <div className="date-reminder-wrapper" ref={popoverRef} style={{ display: 'inline-block' }}>
                   <button 
                     className={`date-reminder-trigger-btn ${dueDate || startTime ? 'has-date' : ''} ${deadlineDate ? 'has-deadline' : ''}`}
@@ -1442,7 +1444,7 @@ export function TaskDetail() {
                 )}
 
                 {/* Priority Selector */}
-                {task.type !== 'note' && (
+                {task && task.type !== 'note' && (
                 <div 
                   className="priority-select-container" 
                   ref={priorityRef}
@@ -1559,7 +1561,7 @@ export function TaskDetail() {
                 )}
 
                 {/* Recurrence Selector */}
-                {task.type !== 'note' && (
+                {task && task.type !== 'note' && (
                 <div 
                   className="recurrence-select-container" 
                   ref={recurrenceRef}
@@ -1674,7 +1676,7 @@ export function TaskDetail() {
                 )}
 
                 {/* AI Classify Button */}
-                {!isAIDisabled && !suggestedQuadrant && task.type !== 'note' && (
+                {!isAIDisabled && !suggestedQuadrant && task && task.type !== 'note' && (
                   <button
                     onClick={handleAIEisenhowerClassify}
                     disabled={aiLoading}
@@ -1947,7 +1949,7 @@ export function TaskDetail() {
               setDescription(val);
               handleDescriptionChange(val);
             }}
-            placeholder={isSubtaskMode ? "Escribe detalles de la subtarea aquí..." : (task.type === 'note' ? "Escribe el contenido de la nota aquí..." : "Add description...")}
+            placeholder={isSubtaskMode ? "Escribe detalles de la subtarea aquí..." : (task && task.type === 'note' ? "Escribe el contenido de la nota aquí..." : "Add description...")}
             tasks={allTasks}
             onCreateSubtask={handleCreateSubtaskFromText}
           />
