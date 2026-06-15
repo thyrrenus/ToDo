@@ -40,7 +40,7 @@ const ICON_MAP = {
   Inbox: InboxIcon
 };
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen, onClose }) {
   const {
     activeList,
     setActiveList: rawSetActiveList,
@@ -61,12 +61,15 @@ export function Sidebar() {
   const setActiveList = (val) => {
     rawSetActiveList(val);
     setActiveTagFilter(null);
+    if (onClose) onClose();
   };
   const [isAdding, setIsAdding] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [selectedListGroupId, setSelectedListGroupId] = useState('');
   const [selectedListIcon, setSelectedListIcon] = useState('Briefcase');
+  const [selectedListType, setSelectedListType] = useState('task');
+  const [editingListType, setEditingListType] = useState('task');
 
   // Tag creation states
   const [isAddingTag, setIsAddingTag] = useState(false);
@@ -117,13 +120,15 @@ export function Sidebar() {
           name: newListName.trim(),
           color: selectedColor,
           group_id: selectedListGroupId ? parseInt(selectedListGroupId, 10) : null,
-          icon: selectedListIcon
+          icon: selectedListIcon,
+          type: selectedListType
         })
       });
       if (res.ok) {
         setNewListName('');
         setSelectedListGroupId('');
         setSelectedListIcon('Briefcase');
+        setSelectedListType('task');
         setIsAdding(false);
         if (onRefreshLists) onRefreshLists();
       }
@@ -167,12 +172,14 @@ export function Sidebar() {
           name: editingListName.trim(),
           color: editingListColor,
           group_id: editingListGroupId ? parseInt(editingListGroupId, 10) : null,
-          icon: editingListIcon
+          icon: editingListIcon,
+          type: editingListType
         })
       });
       if (res.ok) {
         setEditingListId(null);
         setEditingListGroupId('');
+        setEditingListType('task');
         if (onRefreshLists) onRefreshLists();
       }
     } catch (err) {
@@ -205,6 +212,7 @@ export function Sidebar() {
     setEditingListColor(list.color || COLORS[0]);
     setEditingListGroupId(list.group_id ? list.group_id.toString() : '');
     setEditingListIcon(list.icon || 'Briefcase');
+    setEditingListType(list.type || 'task');
   };
 
   // Group helpers
@@ -304,7 +312,12 @@ export function Sidebar() {
 
   const renderList = (list) => {
     const isHovered = hoveredListId === list.id;
-    const IconComponent = ICON_MAP[list.icon];
+    let IconComponent = ICON_MAP[list.icon];
+    if (list.type === 'note' && (!list.icon || list.icon === 'Briefcase')) {
+      IconComponent = BookOpen;
+    } else if (!IconComponent) {
+      IconComponent = list.type === 'note' ? BookOpen : null;
+    }
 
     return (
       <a 
@@ -408,7 +421,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
         <span>✓</span> Tasks
       </div>
@@ -725,6 +738,7 @@ export function Sidebar() {
                     setActiveTagFilter(tag.name);
                     setActiveList(null);
                   }
+                  if (onClose) onClose();
                 }}
                 onDragOver={(e) => {
                   if (!isDraggingList) {
@@ -996,6 +1010,49 @@ export function Sidebar() {
                   {listGroups.map(g => (
                     <option key={g.id} value={g.id} style={{ background: '#1c1c1e' }}>{g.name}</option>
                   ))}
+                </select>
+              </div>
+
+              {/* List Type selector */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Tipo de Lista</label>
+                <select
+                  value={editingListId !== null ? editingListType : selectedListType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (editingListId !== null) {
+                      setEditingListType(val);
+                      if (val === 'note' && editingListIcon === 'Briefcase') {
+                        setEditingListIcon('BookOpen');
+                      } else if (val === 'task' && editingListIcon === 'BookOpen') {
+                        setEditingListIcon('Briefcase');
+                      }
+                    } else {
+                      setSelectedListType(val);
+                      if (val === 'note' && selectedListIcon === 'Briefcase') {
+                        setSelectedListIcon('BookOpen');
+                      } else if (val === 'task' && selectedListIcon === 'BookOpen') {
+                        setSelectedListIcon('Briefcase');
+                      }
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1.5px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    padding: '10px 12px',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                    transition: 'all 0.2s'
+                  }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-hover)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'}
+                >
+                  <option value="task" style={{ background: '#1c1c1e' }}>Lista de Tareas (con Checkbox)</option>
+                  <option value="note" style={{ background: '#1c1c1e' }}>Lista de Notas (Material de consulta)</option>
                 </select>
               </div>
 

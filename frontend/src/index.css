@@ -3,6 +3,7 @@
 :root {
   --bg-color: #121212;
   --sidebar-bg: #1c1c1c;
+  --global-sidebar-bg: #0d0d0d;
   --content-bg: #121212;
   --right-pane-bg: #1e1e1e;
   --text-primary: #e0e0e0;
@@ -471,7 +472,7 @@ body {
 
 .global-sidebar {
   width: 50px;
-  background-color: #161616;
+  background-color: var(--global-sidebar-bg);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -493,7 +494,7 @@ body {
 }
 
 .global-nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(128, 128, 128, 0.1);
   color: var(--text-primary);
 }
 
@@ -524,7 +525,7 @@ body {
 }
 
 .calendar-controls button, .calendar-controls select {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(128, 128, 128, 0.08);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 0.4rem 0.75rem;
@@ -535,7 +536,7 @@ body {
 }
 
 .calendar-controls button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(128, 128, 128, 0.16);
 }
 
 .calendar-grid-container {
@@ -544,14 +545,14 @@ body {
   flex-direction: column;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: #141414;
+  background: var(--right-pane-bg);
   overflow: hidden;
 }
 
 .calendar-days-header {
   display: flex;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(128, 128, 128, 0.04);
 }
 
 .calendar-day-label {
@@ -589,7 +590,7 @@ body {
 .calendar-grid-scroll {
   flex: 1;
   overflow-y: auto;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background: radial-gradient(circle, var(--border-color) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 
@@ -637,7 +638,7 @@ body {
 }
 
 .grid-cell {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-color);
   position: relative;
 }
 
@@ -647,7 +648,8 @@ body {
   left: 0;
   right: 0;
   top: 50%;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.015);
+  border-bottom: 1px dashed var(--border-color);
+  opacity: 0.3;
   pointer-events: none;
 }
 
@@ -676,7 +678,7 @@ body {
 .calendar-month-days-header {
   display: flex;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.01);
+  background: rgba(128, 128, 128, 0.04);
 }
 
 .month-day-header-label {
@@ -711,7 +713,7 @@ body {
 }
 
 .month-grid-cell {
-  background: rgba(255, 255, 255, 0.005);
+  background: transparent;
   border-right: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -738,15 +740,16 @@ body {
 }
 
 .month-grid-cell:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(128, 128, 128, 0.04);
 }
 
 .month-grid-cell.other-month {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(128, 128, 128, 0.06);
 }
 
 .month-grid-cell.other-month .month-day-number {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  opacity: 0.4;
 }
 
 .month-grid-cell.today {
@@ -1647,7 +1650,7 @@ input:checked + .slider:before {
   right: 0;
   top: 100%;
   z-index: 100;
-  background: #1e1e1e;
+  background: var(--right-pane-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -2337,14 +2340,14 @@ input:checked + .slider:before {
 }
 
 .calendar-context-menu {
-  width: 180px;
-  background: rgba(22, 22, 29, 0.9);
+  width: 220px;
+  background: var(--right-pane-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 6px 0;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 8px 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   z-index: 10000;
   animation: fadeInMenu 0.1s ease-out forwards;
 }
@@ -2352,6 +2355,52 @@ input:checked + .slider:before {
 @keyframes fadeInMenu {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
+}
+
+.context-menu-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 12px 2px 12px;
+  user-select: none;
+}
+
+.context-menu-quick-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 12px;
+  gap: 6px;
+}
+
+.context-menu-quick-row button {
+  flex: 1;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.context-menu-quick-row button:hover {
+  background: rgba(128, 128, 128, 0.16);
+  transform: translateY(-1px);
+}
+
+.context-menu-quick-row button:active {
+  transform: translateY(0);
+}
+
+.context-menu-quick-row.priority-row button.active {
+  background: rgba(128, 128, 128, 0.18);
+  border-color: var(--border-color);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .context-menu-item {
@@ -2366,8 +2415,8 @@ input:checked + .slider:before {
 }
 
 .context-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: rgba(128, 128, 128, 0.08);
+  color: var(--text-primary);
 }
 
 .context-menu-item.delete-option {
@@ -2381,8 +2430,8 @@ input:checked + .slider:before {
 
 .context-menu-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 4px 0;
+  background: var(--border-color);
+  margin: 6px 0;
 }
 
 .context-menu-submenu-header {
@@ -2398,7 +2447,7 @@ input:checked + .slider:before {
 }
 
 .context-menu-submenu-header:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(128, 128, 128, 0.08);
 }
 
 .context-menu-submenu-header::after {
@@ -2413,12 +2462,12 @@ input:checked + .slider:before {
   left: 100%;
   top: 0;
   width: 170px;
-  background: rgba(22, 22, 29, 0.95);
+  background: var(--right-pane-bg);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 4px 0;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
 .context-menu-submenu-header:hover .context-menu-submenu {
@@ -3182,8 +3231,8 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
   top: 100%;
   left: 0;
   margin-top: 4px;
-  background: #202024;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--right-pane-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   z-index: 10009;
@@ -3385,4 +3434,374 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
 
 .hljs-deletion {
   background-color: rgba(255, 85, 85, 0.2);
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVENESS AND MOBILE VIEW ADAPTATIONS
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Core Layout adjustments */
+  .root-layout {
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .app-container {
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Hide fixed sidebars on mobile */
+  .global-sidebar {
+    display: none !important;
+  }
+
+  /* Make sidebar slide in as drawer */
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: -100% !important;
+    height: 100vh !important;
+    width: 280px !important;
+    z-index: 1000 !important;
+    transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-shadow: 20px 0 40px rgba(0, 0, 0, 0.6) !important;
+    background: var(--sidebar-bg) !important;
+  }
+
+  .sidebar.mobile-open {
+    left: 0 !important;
+  }
+
+  /* Dark Overlay when sidebar drawer is open */
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 998;
+    animation: fadeInOverlay 0.2s ease-out;
+  }
+
+  @keyframes fadeInOverlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Mobile Bottom Navigation Bar */
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 62px;
+    background: rgba(20, 20, 24, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 990;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-bottom-nav-item {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-family: inherit;
+    font-weight: 600;
+    transition: color 0.15s ease, transform 0.1s ease;
+    flex: 1;
+    height: 100%;
+  }
+
+  .mobile-bottom-nav-item:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: var(--accent-hover);
+  }
+
+  .mobile-bottom-nav-item svg {
+    width: 20px;
+    height: 20px;
+    opacity: 0.9;
+    transition: transform 0.15s ease;
+  }
+
+  .mobile-bottom-nav-item.active svg {
+    transform: translateY(-1px);
+  }
+
+  /* Main Content Adjustments */
+  .main-content {
+    padding: 1.25rem 1rem calc(80px + env(safe-area-inset-bottom)) 1rem !important;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  /* Mobile Header container styling */
+  .mobile-top-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .mobile-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-menu-trigger {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 8px;
+    transition: background-color 0.15s;
+  }
+
+  .mobile-menu-trigger:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .mobile-header-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  /* Full Screen Overlay for Task Detail on mobile */
+  .right-pane {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    z-index: 2000 !important;
+    box-shadow: none !important;
+    border-left: none !important;
+  }
+
+  .pane-resize-handle {
+    display: none !important; /* Resize not possible/logical on mobile full-screen */
+  }
+
+  /* Eisenhower Matrix Stacking on mobile */
+  .eisenhower-grid {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: repeat(4, auto) !important;
+    gap: 1rem !important;
+    min-height: auto !important;
+  }
+
+  .eisenhower-quadrant {
+    min-height: 280px;
+  }
+
+  /* Kanban Adaptations on mobile */
+  .kanban-lists-container {
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+    overflow-x: hidden !important;
+  }
+
+  .kanban-list {
+    width: 100% !important;
+    max-height: 480px;
+  }
+
+  .kanban-mobile-tabs {
+    display: flex;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    gap: 4px;
+  }
+
+  .kanban-mobile-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+
+  .kanban-mobile-tab-btn.active {
+    background: var(--accent-hover);
+    color: #ffffff;
+  }
+
+  /* Calendar View Adapts */
+  .calendar-month-grid {
+    min-height: 380px !important;
+    height: 380px !important;
+  }
+
+  .month-grid-cell {
+    min-height: 60px !important;
+    padding: 4px !important;
+    align-items: center;
+  }
+
+  .month-day-number-container {
+    justify-content: center !important;
+    margin-bottom: 2px !important;
+  }
+
+  .month-day-number {
+    font-size: 0.72rem !important;
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  /* Hide event text blocks inside cell, display dots container instead */
+  .month-events-list {
+    display: none !important;
+  }
+
+  .month-event-dots-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.5px;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-top: auto;
+    padding: 2px 0;
+  }
+
+  .month-event-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  /* Mobile bottom events listing details */
+  .mobile-day-events-panel {
+    margin-top: 1rem;
+    padding: 0.75rem 0.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mobile-day-events-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .mobile-day-event-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-day-event-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .mobile-day-event-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .mobile-day-event-title-text {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-day-event-time {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  /* Day/Week view header columns width */
+  .calendar-days-header {
+    font-size: 0.75rem;
+  }
+
+  .day-name {
+    font-size: 0.68rem;
+  }
+
+  .day-number {
+    font-size: 1rem;
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Pomodoro adapta */
+  .pomodoro-view-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
+
+  .pomodoro-right-panel {
+    display: none !important; /* Hide calendar agenda from focus timer on mobile */
+  }
+
+  .pomodoro-left-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 }

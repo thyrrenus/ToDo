@@ -1089,7 +1089,7 @@ export function TaskDetail() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={handleUpdate}
-          placeholder={isSubtaskMode ? "Subtask Title" : "Task Title"}
+          placeholder={isSubtaskMode ? "Subtask Title" : (task && task.type === 'note' ? "Título de la Nota" : "Task Title")}
         />
 
         {(task || subtask) && (
@@ -1124,7 +1124,8 @@ export function TaskDetail() {
                 marginBottom: '1.25rem',
                 marginTop: '0.5rem'
               }}>
-                <div className="date-reminder-wrapper" ref={popoverRef} style={{ display: 'inline-block' }}>
+                {task.type !== 'note' && (
+                  <div className="date-reminder-wrapper" ref={popoverRef} style={{ display: 'inline-block' }}>
                   <button 
                     className={`date-reminder-trigger-btn ${dueDate || startTime ? 'has-date' : ''} ${deadlineDate ? 'has-deadline' : ''}`}
                     onClick={() => setShowDatePicker(!showDatePicker)}
@@ -1384,6 +1385,7 @@ export function TaskDetail() {
                     </div>
                   )}
                 </div>
+                )}
 
 
 
@@ -1440,6 +1442,7 @@ export function TaskDetail() {
                 )}
 
                 {/* Priority Selector */}
+                {task.type !== 'note' && (
                 <div 
                   className="priority-select-container" 
                   ref={priorityRef}
@@ -1553,8 +1556,10 @@ export function TaskDetail() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Recurrence Selector */}
+                {task.type !== 'note' && (
                 <div 
                   className="recurrence-select-container" 
                   ref={recurrenceRef}
@@ -1666,9 +1671,10 @@ export function TaskDetail() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* AI Classify Button */}
-                {!isAIDisabled && !suggestedQuadrant && (
+                {!isAIDisabled && !suggestedQuadrant && task.type !== 'note' && (
                   <button
                     onClick={handleAIEisenhowerClassify}
                     disabled={aiLoading}
@@ -1941,7 +1947,7 @@ export function TaskDetail() {
               setDescription(val);
               handleDescriptionChange(val);
             }}
-            placeholder={isSubtaskMode ? "Escribe detalles de la subtarea aquí..." : "Add description..."}
+            placeholder={isSubtaskMode ? "Escribe detalles de la subtarea aquí..." : (task.type === 'note' ? "Escribe el contenido de la nota aquí..." : "Add description...")}
             tasks={allTasks}
             onCreateSubtask={handleCreateSubtaskFromText}
           />
@@ -1969,7 +1975,7 @@ export function TaskDetail() {
           )}
         </div>
 
-        {!isSubtaskMode && task && (
+        {!isSubtaskMode && task && task.type !== 'note' && (
           <div className="detail-subtasks-section" style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <h3 className="section-subtitle" style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>Subtareas</h3>

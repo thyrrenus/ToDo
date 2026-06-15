@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Check, Calendar, AlignLeft, Trash2, Edit, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useTodo } from '../context/TodoContext';
@@ -23,6 +23,17 @@ export function ProjectKanbanView() {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [quickAddTitles, setQuickAddTitles] = useState({}); // { sectionId: 'text' }
   const [activeDragSectionId, setActiveDragSectionId] = useState(null);
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [activeColumnId, setActiveColumnId] = useState('none');
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Filter tasks for this project list
   const projectTasks = tasks.filter(t => t.list_id === activeList);
@@ -143,8 +154,11 @@ export function ProjectKanbanView() {
     return (
       <div
         key={task.id}
-        draggable
-        onDragStart={(e) => handleDragStart(e, task.id)}
+        draggable={!isMobile}
+        onDragStart={(e) => {
+          if (isMobile) return;
+          handleDragStart(e, task.id);
+        }}
         onClick={() => onSelectTask(task.id)}
         style={{
           background: 'rgba(255,255,255,0.02)',
@@ -332,131 +346,149 @@ export function ProjectKanbanView() {
     );
   };
 
+  const cols = [
+    { id: 'none', title: 'Sin Sección 📥', sectionId: null, tasks: projectTasks.filter(t => !t.section_id) },
+    ...projectSections.map(s => ({ id: s.id.toString(), title: s.name, sectionId: s.id, tasks: projectTasks.filter(t => t.section_id === s.id) }))
+  ];
+
+  const currentActiveColumnId = cols.some(c => c.id === activeColumnId) ? activeColumnId : 'none';
+
   return (
-    <div style={{
-      display: 'flex',
-      gap: '1.25rem',
-      overflowX: 'auto',
-      minHeight: '100%',
-      height: 'auto',
-      padding: '0.25rem 0 1rem 0',
-      alignItems: 'flex-start',
-      animation: 'fadeIn 0.25s ease'
-    }}>
-      {/* 1. First column: No Section / Sin sección */}
-      {renderColumn(
-        null, 
-        'Sin Sección 📥', 
-        projectTasks.filter(t => !t.section_id)
+    <div 
+      className={isMobile ? "kanban-lists-container" : ""}
+      style={{
+        display: 'flex',
+        gap: '1.25rem',
+        overflowX: 'auto',
+        minHeight: '100%',
+        height: 'auto',
+        padding: '0.25rem 0 1rem 0',
+        alignItems: 'flex-start',
+        animation: 'fadeIn 0.25s ease',
+        flexDirection: isMobile ? 'column' : 'row',
+        width: '100%'
+      }}
+    >
+      {isMobile && cols.length > 0 && (
+        <div className="kanban-mobile-tabs" style={{ width: '100%' }}>
+          {cols.map(col => (
+            <button
+              key={col.id}
+              className={`kanban-mobile-tab-btn ${currentActiveColumnId === col.id ? 'active' : ''}`}
+              onClick={() => setActiveColumnId(col.id)}
+              type="button"
+            >
+              {col.title} ({col.tasks.length})
+            </button>
+          ))}
+        </div>
       )}
 
-      {/* 2. Project Sections Columns */}
-      {projectSections.map(section => 
-        renderColumn(
-          section.id, 
-          section.name, 
-          projectTasks.filter(t => t.section_id === section.id)
-        )
-      )}
+      {cols
+        .filter(c => !isMobile || c.id === currentActiveColumnId)
+        .map(col => renderColumn(col.sectionId, col.title, col.tasks))
+      }
 
       {/* 3. "Añadir Sección" Column Button */}
-      {isAddingSection ? (
-        <form 
-          onSubmit={handleCreateSection}
-          style={{
-            width: '260px',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1.5px dashed var(--accent-hover)',
-            borderRadius: '12px',
-            padding: '1rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            flexShrink: 0
-          }}
-        >
-          <input 
-            type="text"
-            placeholder="Nombre de la sección..."
-            value={newSectionName}
-            onChange={(e) => setNewSectionName(e.target.value)}
-            autoFocus
+      {(!isMobile || currentActiveColumnId === 'none') && (
+        isAddingSection ? (
+          <form 
+            onSubmit={handleCreateSection}
             style={{
-              background: 'rgba(0,0,0,0.2)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              padding: '6px 10px',
-              color: 'var(--text-primary)',
-              fontSize: '0.85rem',
-              fontFamily: 'inherit',
-              outline: 'none'
+              width: '260px',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1.5px dashed var(--accent-hover)',
+              borderRadius: '12px',
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              flexShrink: 0
             }}
-          />
-          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-            <button 
-              type="button" 
-              onClick={() => setIsAddingSection(false)}
+          >
+            <input 
+              type="text"
+              placeholder="Nombre de la sección..."
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              autoFocus
               style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                padding: '4px 8px'
+                background: 'rgba(0,0,0,0.2)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem',
+                fontFamily: 'inherit',
+                outline: 'none'
               }}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit"
-              style={{
-                background: 'var(--accent-hover)',
-                border: 'none',
-                color: '#ffffff',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                padding: '4px 10px'
-              }}
-            >
-              Añadir
-            </button>
-          </div>
-        </form>
-      ) : (
-        <button
-          onClick={() => setIsAddingSection(true)}
-          style={{
-            width: '240px',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px dashed var(--border-color)',
-            borderRadius: '12px',
-            padding: '14px',
-            color: 'var(--text-secondary)',
-            fontSize: '0.85rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            flexShrink: 0,
-            transition: 'all 0.15s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-            e.currentTarget.style.borderColor = 'var(--accent-hover)';
-            e.currentTarget.style.color = 'var(--text-primary)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-            e.currentTarget.style.borderColor = 'var(--border-color)';
-            e.currentTarget.style.color = 'var(--text-secondary)';
-          }}
-        >
-          <Plus size={16} /> Añadir Columna / Sección
-        </button>
+            />
+            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+              <button 
+                type="button" 
+                onClick={() => setIsAddingSection(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  padding: '4px 8px'
+                }}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                style={{
+                  background: 'var(--accent-hover)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  padding: '4px 10px'
+                }}
+              >
+                Añadir
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            onClick={() => setIsAddingSection(true)}
+            style={{
+              width: '240px',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px dashed var(--border-color)',
+              borderRadius: '12px',
+              padding: '14px',
+              color: 'var(--text-secondary)',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              flexShrink: 0,
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+              e.currentTarget.style.borderColor = 'var(--accent-hover)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+          >
+            <Plus size={16} /> Añadir Columna / Sección
+          </button>
+        )
       )}
     </div>
   );

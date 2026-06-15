@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useTodo } from '../context/TodoContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, ChevronDown, ChevronRight, Inbox, ListFilter, Calendar, ArrowUpDown, Undo2, Folder, CalendarDays } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Inbox, ListFilter, Calendar, ArrowUpDown, Undo2, Folder, CalendarDays, Trash2 } from 'lucide-react';
 
 const formatDateKey = (dateStr) => {
   if (!dateStr) return 'Sin fecha';
@@ -34,9 +34,16 @@ export function CompletedView() {
     tasks = [],
     lists = [],
     handleToggleTask,
+    handleDeleteTask,
     syncingTaskIds,
     loading
   } = useTodo();
+
+  // Hover state
+  const [hoveredTaskId, setHoveredTaskId] = useState(null);
+
+  // Deletion confirm modal state
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   // Filters State
   const [dateFilter, setDateFilter] = useState('all');
@@ -309,8 +316,14 @@ export function CompletedView() {
                                   transition: 'background-color 0.2s ease',
                                   cursor: 'default'
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+                                  setHoveredTaskId(task.id);
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                  setHoveredTaskId(null);
+                                }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                                   {/* Custom Checkbox (Always checked) */}
@@ -356,7 +369,7 @@ export function CompletedView() {
                                   </span>
                                 </div>
 
-                                {/* List Tag origin */}
+                                {/* List Tag origin & delete button */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                                   {isSyncing && (
                                     <div className="sync-spinner" style={{ width: '12px', height: '12px' }} />
@@ -380,6 +393,33 @@ export function CompletedView() {
                                     }} />
                                     {listName}
                                   </div>
+
+                                  {/* Delete button on hover */}
+                                  {hoveredTaskId === task.id && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTaskToDelete(task.id);
+                                      }}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--danger-color, #ef4444)',
+                                        cursor: 'pointer',
+                                        padding: '4px',
+                                        borderRadius: '4px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                      onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                      title="Eliminar tarea completada permanentemente"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </motion.div>
@@ -426,6 +466,76 @@ export function CompletedView() {
           </div>
         )}
       </div>
+      
+      {/* Custom confirm deletion modal */}
+      {taskToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            background: 'var(--right-pane-bg)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '380px',
+            width: '100%',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '1.15rem', color: 'var(--text-primary)' }}>¿Eliminar tarea completada?</h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              Esta acción es permanente y no se puede deshacer. La tarea se borrará de tu historial para siempre.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setTaskToDelete(null)}
+                style={{
+                  flex: 1,
+                  background: 'rgba(128,128,128,0.1)',
+                  border: 'none',
+                  color: 'var(--text-primary)',
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteTask(taskToDelete);
+                  setTaskToDelete(null);
+                }}
+                style={{
+                  flex: 1,
+                  background: 'var(--danger-color, #ef4444)',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600
+                }}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

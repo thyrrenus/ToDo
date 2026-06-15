@@ -267,15 +267,19 @@ export function SettingsView({ user, onUpdateUser, tasks, lists, onRefreshTasks 
       
       let sidebarBg = '#f1f3f5';
       let paneBg = '#ffffff';
+      let globalSidebarBg = '#e9ecef';
       if (bg === '#f0f4f8') {
         sidebarBg = '#e2e8f0';
         paneBg = '#ffffff';
+        globalSidebarBg = '#d0d7de';
       } else if (bg === '#f4fbf7') {
         sidebarBg = '#e6f4ea';
         paneBg = '#ffffff';
+        globalSidebarBg = '#d1e7dd';
       }
       document.documentElement.style.setProperty('--sidebar-bg', sidebarBg);
       document.documentElement.style.setProperty('--right-pane-bg', paneBg);
+      document.documentElement.style.setProperty('--global-sidebar-bg', globalSidebarBg);
     } else {
       document.documentElement.style.setProperty('--text-primary', '#e0e0e0');
       document.documentElement.style.setProperty('--text-secondary', '#9e9e9e');
@@ -283,15 +287,19 @@ export function SettingsView({ user, onUpdateUser, tasks, lists, onRefreshTasks 
       
       let sidebarBg = '#1c1c1c';
       let paneBg = '#1e1e1e';
+      let globalSidebarBg = '#0d0d0d';
       if (bg === '#050505') { // AMOLED pure dark
         sidebarBg = '#0c0c0d';
         paneBg = '#0f0f10';
+        globalSidebarBg = '#000000';
       } else if (bg === '#0B0F19') { // Navy Blue Cockpit
         sidebarBg = '#111827';
         paneBg = '#1f2937';
+        globalSidebarBg = '#080c14';
       }
       document.documentElement.style.setProperty('--sidebar-bg', sidebarBg);
       document.documentElement.style.setProperty('--right-pane-bg', paneBg);
+      document.documentElement.style.setProperty('--global-sidebar-bg', globalSidebarBg);
     }
   };
 

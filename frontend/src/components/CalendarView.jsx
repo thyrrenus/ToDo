@@ -29,6 +29,16 @@ export function CalendarView() {
   };
   const [viewMode, setViewMode] = useState('week'); // 'day', 'week', or 'month'
   const [currentDate, setCurrentDate] = useState(startOfToday());
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [mobileSelectedDay, setMobileSelectedDay] = useState(startOfToday());
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const [showAIRescheduleModal, setShowAIRescheduleModal] = useState(false);
   const [rescheduleProposal, setRescheduleProposal] = useState([]);
@@ -303,6 +313,7 @@ export function CalendarView() {
 
   // Drag-to-Create handler inside daily/weekly columns
   const handleColumnMouseDown = (e, day) => {
+    if (isMobile) return; // Disable drag-to-create on mobile
     if (e.button !== 0) return; // Only left click
 
     // Only start drag if clicking directly on a grid cell or column background
@@ -421,6 +432,10 @@ export function CalendarView() {
 
   // Month View cell click handler
   const handleMonthCellClick = (e, day) => {
+    setMobileSelectedDay(day);
+    if (isMobile && !e.target.closest('.month-cell-add-btn')) {
+      return;
+    }
     if (e.target.closest('.month-event-item')) return;
 
     const container = document.querySelector('.calendar-view');
@@ -550,6 +565,7 @@ export function CalendarView() {
 
   // Mouse drag & resize handlers
   const handleMouseDown = (e, eventItem, actionType) => {
+    if (isMobile) return;
     if (eventItem.isExternal) return;
     e.stopPropagation();
     e.preventDefault();
@@ -1359,37 +1375,91 @@ export function CalendarView() {
                         </button>
                         <span className={`month-day-number ${isToday ? 'today-badge' : ''}`}>{format(day, 'd')}</span>
                       </div>
-                      <div className="month-events-list">
-                        {dayEvents.map(event => {
-                          const isCompleted = event.isCompleted;
-                          const color = event.isExternal ? '#0078d4' : getListColor(event.list_id);
-                          const isDragging = draggingEventId === event.id;
-                          return (
-                            <div 
-                              key={event.id} 
-                              className={`month-event-item ${isCompleted ? 'completed' : ''} ${isDragging ? 'dragging' : ''}`}
-                              draggable={!event.isExternal}
-                              onDragStart={(e) => {
-                                handleMonthDragStart(e, event);
-                                setDraggingEventId(event.id);
-                              }}
-                              onDragEnd={() => setDraggingEventId(null)}
-                              onClick={(e) => handleMonthEventClick(e, event)}
-                              onContextMenu={(e) => handleContextMenu(e, event)}
-                              onMouseEnter={(e) => handleMouseEnter(e, event)}
-                              onMouseLeave={handleMouseLeave}
-                              style={{ borderLeft: `3px solid ${color}` }}
-                            >
-                              <span className="month-event-title">{event.title}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      {isMobile ? (
+                        <div className="month-event-dots-container">
+                          {dayEvents.map(event => {
+                            const color = event.isExternal ? '#0078d4' : getListColor(event.list_id);
+                            return (
+                              <span 
+                                key={event.id} 
+                                className="month-event-dot" 
+                                style={{ backgroundColor: color }}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="month-events-list">
+                          {dayEvents.map(event => {
+                            const isCompleted = event.isCompleted;
+                            const color = event.isExternal ? '#0078d4' : getListColor(event.list_id);
+                            const isDragging = draggingEventId === event.id;
+                            return (
+                              <div 
+                                key={event.id} 
+                                className={`month-event-item ${isCompleted ? 'completed' : ''} ${isDragging ? 'dragging' : ''}`}
+                                draggable={!event.isExternal}
+                                onDragStart={(e) => {
+                                  handleMonthDragStart(e, event);
+                                  setDraggingEventId(event.id);
+                                }}
+                                onDragEnd={() => setDraggingEventId(null)}
+                                onClick={(e) => handleMonthEventClick(e, event)}
+                                onContextMenu={(e) => handleContextMenu(e, event)}
+                                onMouseEnter={(e) => handleMouseEnter(e, event)}
+                                onMouseLeave={handleMouseLeave}
+                                style={{ borderLeft: `3px solid ${color}` }}
+                              >
+                                <span className="month-event-title">{event.title}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            {isMobile && (
+              <div className="mobile-day-events-panel">
+                <div className="mobile-day-events-title">
+                  Eventos de {format(mobileSelectedDay, "d 'de' MMMM", { locale: es })}
+                </div>
+                {scheduledEvents.filter(e => isSameDay(e.start, mobileSelectedDay)).length === 0 ? (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '8px 4px', fontStyle: 'italic' }}>
+                    No hay eventos programados
+                  </div>
+                ) : (
+                  scheduledEvents.filter(e => isSameDay(e.start, mobileSelectedDay)).map(event => {
+                    const color = event.isExternal ? '#0078d4' : getListColor(event.list_id);
+                    const timeStr = event.start ? format(event.start, 'h:mm a') : 'Todo el día';
+                    return (
+                      <div 
+                        key={event.id} 
+                        className="mobile-day-event-item"
+                        onClick={() => {
+                          if (onSelectEvent) {
+                            onSelectEvent(event.itemId, event.isSubtask);
+                          } else if (onSelectTask) {
+                            onSelectTask(event.itemId);
+                          }
+                        }}
+                      >
+                        <div className="mobile-day-event-title-wrap">
+                          <span className="mobile-day-event-dot" style={{ backgroundColor: color }} />
+                          <span className="mobile-day-event-title-text" style={{ textDecoration: event.isCompleted ? 'line-through' : 'none', opacity: event.isCompleted ? 0.6 : 1 }}>
+                            {event.title}
+                          </span>
+                        </div>
+                        <span className="mobile-day-event-time">{timeStr}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -1646,6 +1716,16 @@ export function CalendarView() {
                               onMouseEnter={(e) => handleMouseEnter(e, event)}
                               onMouseLeave={handleMouseLeave}
                               onContextMenu={(e) => handleContextMenu(e, event)}
+                              onClick={(e) => {
+                                if (isMobile) {
+                                  e.stopPropagation();
+                                  if (onSelectEvent) {
+                                    onSelectEvent(event.itemId, event.isSubtask);
+                                  } else if (onSelectTask) {
+                                    onSelectTask(event.itemId);
+                                  }
+                                }
+                              }}
                             >
                               <div className="task-block-title" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 {event.isSubtask && <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginRight: '4px' }}>[Sub]</span>}
@@ -1872,11 +1952,41 @@ export function CalendarView() {
         </div>
       )}
 
-      {/* Quick Create Popover */}
+      {/* Backdrop overlay for mobile quick create modal */}
+      {isMobile && quickCreate && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 2999
+          }}
+          onClick={() => setQuickCreate(null)}
+        />
+      )}
+
+      {/* Quick Create Popover / Modal */}
       {quickCreate && (
         <div 
-          className="calendar-quick-create-popover"
-          style={{
+          className={isMobile ? "calendar-quick-create-modal" : "calendar-quick-create-popover"}
+          style={isMobile ? {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '90%',
+            maxWidth: '320px',
+            backgroundColor: 'var(--right-pane-bg, #18181c)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '12px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            zIndex: 3000,
+            padding: '16px'
+          } : {
             position: 'absolute',
             left: `${quickCreate.x}px`,
             top: `${quickCreate.y}px`

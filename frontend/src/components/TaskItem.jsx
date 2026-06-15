@@ -1,5 +1,5 @@
 import { useState, memo } from 'react';
-import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { Check, Calendar as CalendarIcon, ListTodo, AlignLeft, Plus, ChevronDown, ChevronRight, Trash2, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubtaskId, onClick, onToggle, onSelectSubtask, onSubtaskAdded, onContextMenu, isSyncing }) {
@@ -10,8 +10,9 @@ export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubta
 
   if (!task) return null;
 
-  const isCompleted = task.is_completed === 1 || task.is_completed === true;
-  const isOverdue = task.due_date && !isCompleted && new Date(task.due_date.split('T')[0]) < new Date(new Date().toISOString().split('T')[0]);
+  const isNote = task.type === 'note';
+  const isCompleted = (task.is_completed === 1 || task.is_completed === true) && !isNote;
+  const isOverdue = task.due_date && !isCompleted && !isNote && new Date(task.due_date.split('T')[0]) < new Date(new Date().toISOString().split('T')[0]);
   const todayStr = new Date().toISOString().split('T')[0];
   const deadlineStr = task.deadline_date && typeof task.deadline_date === 'string' ? task.deadline_date.split('T')[0] : null;
   const isDeadlineExceeded = !!(deadlineStr && !isCompleted && deadlineStr < todayStr);
@@ -120,34 +121,54 @@ export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubta
           )}
         </div>
 
-        <div 
-          className={`checkbox ${isSyncing ? 'syncing' : ''}`} 
-          onClick={(e) => { 
-            e.stopPropagation(); 
-            if (!isSyncing) onToggle(); 
-          }}
-          style={isSyncing ? { pointerEvents: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}}
-        >
-          {isSyncing ? (
-            <div className="checkbox-spinner" />
-          ) : (
-            isCompleted && <Check size={14} color="#0f1115" />
-          )}
-        </div>
+        {isNote ? (
+          <div 
+            className="note-icon"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '18px',
+              height: '18px',
+              marginRight: '6px',
+              color: 'var(--text-secondary)',
+              opacity: 0.85
+            }}
+          >
+            <FileText size={15} />
+          </div>
+        ) : (
+          <div 
+            className={`checkbox ${isSyncing ? 'syncing' : ''}`} 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              if (!isSyncing) onToggle(); 
+            }}
+            style={isSyncing ? { pointerEvents: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}}
+          >
+            {isSyncing ? (
+              <div className="checkbox-spinner" />
+            ) : (
+              isCompleted && <Check size={14} color="#0f1115" />
+            )}
+          </div>
+        )}
         
         <div className="task-content">
           <div className="task-title-wrapper">
             <div className="task-title">{task.title}</div>
             
-            <div className="task-item-actions">
-              <button 
-                className="icon-btn add-subtask-btn" 
-                onClick={(e) => { e.stopPropagation(); setIsAddingSubtask(true); }} 
-                title="Añadir subtarea"
-              >
-                <Plus size={14} />
-              </button>
-            </div>
+            {!isNote && (
+              <div className="task-item-actions">
+                <button 
+                  className="icon-btn add-subtask-btn" 
+                  onClick={(e) => { e.stopPropagation(); setIsAddingSubtask(true); }} 
+                  title="Añadir subtarea"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            )}
           </div>
 
           {isAddingSubtask && (

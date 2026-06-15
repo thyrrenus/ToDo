@@ -856,13 +856,17 @@ export function TodoProvider({ children }) {
   };
 
   const handleAddTask = async (taskData) => {
+    const targetList = lists.find(l => l.id === taskData.list_id);
+    const resolvedType = (targetList && targetList.type === 'note') ? 'note' : (taskData.type || 'task');
+    const finalTaskData = { ...taskData, type: resolvedType };
+
     const tempId = 'offline_' + Date.now() + '_' + Math.random();
     const newTask = {
-      ...taskData,
+      ...finalTaskData,
       id: tempId,
       is_completed: 0,
       subtasks: [],
-      tags: taskData.tags ? taskData.tags.map(name => {
+      tags: finalTaskData.tags ? finalTaskData.tags.map(name => {
         const existing = tags.find(t => t.name.toLowerCase() === name.toLowerCase());
         return existing || { id: 'tag_' + Math.random(), name };
       }) : []
@@ -875,7 +879,7 @@ export function TodoProvider({ children }) {
       console.error(e);
     }
 
-    const actionData = { url: '/api/tasks', method: 'POST', body: taskData, tempId };
+    const actionData = { url: '/api/tasks', method: 'POST', body: finalTaskData, tempId };
 
     if (!navigator.onLine) {
       await db.enqueueAction(actionData);
@@ -887,7 +891,7 @@ export function TodoProvider({ children }) {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData)
+        body: JSON.stringify(finalTaskData)
       });
       if (res.ok) {
         await db.deleteItem('tasks', tempId);
@@ -1114,6 +1118,10 @@ export function TodoProvider({ children }) {
 
     const parsedTaskData = parseNLPQuickAdd(titleToUse, lists, activeList);
     let finalTaskData = { ...parsedTaskData };
+    const targetList = lists.find(l => l.id === finalTaskData.list_id);
+    if (targetList && targetList.type === 'note') {
+      finalTaskData.type = 'note';
+    }
 
     try {
       const res = await fetch('/api/tasks', {

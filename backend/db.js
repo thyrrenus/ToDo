@@ -84,6 +84,7 @@ const initDb = async () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       color TEXT,
+      type TEXT DEFAULT 'task',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -111,6 +112,7 @@ const initDb = async () => {
       recurrence_type TEXT DEFAULT 'none',
       deadline_date DATETIME,
       estimated_effort REAL DEFAULT 0,
+      type TEXT DEFAULT 'task',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (list_id) REFERENCES lists(id),
       FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
@@ -212,6 +214,8 @@ const initDb = async () => {
       ALTER TABLE subtasks ADD COLUMN completed_at DATETIME;
       ALTER TABLE tasks ADD COLUMN deadline_date DATETIME;
       ALTER TABLE tasks ADD COLUMN estimated_effort REAL DEFAULT 0;
+      ALTER TABLE lists ADD COLUMN type TEXT DEFAULT 'task';
+      ALTER TABLE tasks ADD COLUMN type TEXT DEFAULT 'task';
     `);
 
   // Create Indexes for performance optimization on foreign keys

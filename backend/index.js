@@ -242,9 +242,9 @@ app.get('/api/lists', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/lists', authenticateToken, async (req, res) => {
-  const { name, color, group_id, icon } = req.body;
+  const { name, color, group_id, icon, type } = req.body;
   try {
-    const info = await db.prepare('INSERT INTO lists (name, color, user_id, group_id, icon) VALUES (?, ?, ?, ?, ?)').run(name, color, req.user.id, group_id || null, icon || null);
+    const info = await db.prepare('INSERT INTO lists (name, color, user_id, group_id, icon, type) VALUES (?, ?, ?, ?, ?, ?)').run(name, color, req.user.id, group_id || null, icon || null, type || 'task');
     const newList = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(info.lastInsertRowid, req.user.id);
     res.json(newList);
   } catch (err) {
@@ -253,17 +253,18 @@ app.post('/api/lists', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/lists/:id', authenticateToken, async (req, res) => {
-  const { name, color, group_id, icon } = req.body;
+  const { name, color, group_id, icon, type } = req.body;
   const { id } = req.params;
   try {
     const current = await db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?').get(id, req.user.id);
     if (!current) return res.status(404).json({ error: 'List not found' });
 
-    await db.prepare('UPDATE lists SET name = ?, color = ?, group_id = ?, icon = ? WHERE id = ? AND user_id = ?').run(
+    await db.prepare('UPDATE lists SET name = ?, color = ?, group_id = ?, icon = ?, type = ? WHERE id = ? AND user_id = ?').run(
       name !== undefined ? name : current.name,
       color !== undefined ? color : current.color,
       group_id !== undefined ? group_id : current.group_id,
       icon !== undefined ? icon : current.icon,
+      type !== undefined ? type : current.type,
       id,
       req.user.id
     );
@@ -476,11 +477,11 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags, recurrence_type, deadline_date, estimated_effort } = req.body;
+  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags, recurrence_type, deadline_date, estimated_effort, type } = req.body;
   try {
     const info = await db.prepare(`
-      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type, deadline_date, estimated_effort) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type, deadline_date, estimated_effort, type) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       list_id || null, 
       section_id || null, 
@@ -495,7 +496,8 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       assigned_to || null,
       recurrence_type || 'none',
       deadline_date || null,
-      estimated_effort !== undefined && estimated_effort !== null ? Number(estimated_effort) : 0
+      estimated_effort !== undefined && estimated_effort !== null ? Number(estimated_effort) : 0,
+      type || 'task'
     );
     const taskId = info.lastInsertRowid;
     
@@ -519,7 +521,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
-  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags, recurrence_type, deadline_date, estimated_effort } = req.body;
+  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags, recurrence_type, deadline_date, estimated_effort, type } = req.body;
   const { id } = req.params;
   try {
     const current = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
@@ -615,7 +617,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
 
     await db.prepare(`
       UPDATE tasks 
-      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, completed_at = ?, team_id = ?, assigned_to = ?, recurrence_type = ?, deadline_date = ?, estimated_effort = ? 
+      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, completed_at = ?, team_id = ?, assigned_to = ?, recurrence_type = ?, deadline_date = ?, estimated_effort = ?, type = ? 
       WHERE id = ?
     `).run(
       list_id !== undefined ? list_id : current.list_id,
@@ -633,6 +635,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       recurrence_type !== undefined ? recurrence_type : current.recurrence_type,
       deadline_date !== undefined ? deadline_date : current.deadline_date,
       estimated_effort !== undefined ? (estimated_effort !== null ? Number(estimated_effort) : 0) : current.estimated_effort,
+      type !== undefined ? type : current.type,
       id
     );
 

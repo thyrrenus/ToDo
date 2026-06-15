@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Columns, Calendar, ListTodo, Plus, Check } from 'lucide-react';
 import { useTodo } from '../context/TodoContext';
 
@@ -20,6 +20,16 @@ export function KanbanView() {
   };
   const [groupBy, setGroupBy] = useState('list'); // 'list', 'priority', 'status'
   const [inlineTitles, setInlineTitles] = useState({});
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [activeColumnId, setActiveColumnId] = useState(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleDragStart = (e, taskId) => {
     e.dataTransfer.setData('taskId', taskId.toString());
@@ -185,6 +195,24 @@ export function KanbanView() {
       </div>
 
       {/* Board Columns container */}
+      {isMobile && columns.length > 0 && (
+        <div className="kanban-mobile-tabs">
+          {columns.map(col => {
+            const currentActiveColId = columns.some(c => c.id === activeColumnId) ? activeColumnId : columns[0].id;
+            return (
+              <button
+                key={col.id}
+                className={`kanban-mobile-tab-btn ${currentActiveColId === col.id ? 'active' : ''}`}
+                onClick={() => setActiveColumnId(col.id)}
+                type="button"
+              >
+                {col.title} ({getColumnTasks(col.id).length})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div 
         className="kanban-board" 
         style={{
@@ -194,10 +222,17 @@ export function KanbanView() {
           overflowX: 'auto',
           overflowY: 'hidden',
           paddingBottom: '0.5rem',
-          alignItems: 'stretch'
+          alignItems: 'stretch',
+          flexDirection: isMobile ? 'column' : 'row'
         }}
       >
-        {columns.map(col => {
+        {columns
+          .filter(col => {
+            if (!isMobile) return true;
+            const currentActiveColId = columns.some(c => c.id === activeColumnId) ? activeColumnId : columns[0].id;
+            return col.id === currentActiveColId;
+          })
+          .map(col => {
           const colTasks = getColumnTasks(col.id);
           
           return (
@@ -244,8 +279,11 @@ export function KanbanView() {
                     return (
                       <div
                         key={task.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        draggable={!isMobile}
+                        onDragStart={(e) => {
+                          if (isMobile) return;
+                          handleDragStart(e, task.id);
+                        }}
                         onClick={() => onSelectTask(task.id)}
                         onContextMenu={(e) => {
                           if (onTaskContextMenu) {

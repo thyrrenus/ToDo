@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AlertCircle, Calendar, CalendarDays, Trash2, Plus, LayoutGrid, Check } from 'lucide-react';
 import { useTodo } from '../context/TodoContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,14 @@ export function EisenhowerView() {
     setSelectedTaskId(id);
     setSelectedSubtaskId(null);
   };
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [inlineTitles, setInlineTitles] = useState({
     3: '', // Q1
     2: '', // Q2
@@ -181,8 +189,11 @@ export function EisenhowerView() {
                       <motion.div
                         key={task.id}
                         layout
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        draggable={!isMobile}
+                        onDragStart={(e) => {
+                          if (isMobile) return;
+                          handleDragStart(e, task.id);
+                        }}
                         onClick={() => onSelectTask(task.id)}
                         onContextMenu={(e) => {
                           if (onTaskContextMenu) {

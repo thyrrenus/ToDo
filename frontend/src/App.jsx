@@ -25,7 +25,7 @@ const ProjectKanbanView = lazy(() => import('./components/ProjectKanbanView').th
 const AddTaskWidget = lazy(() => import('./components/AddTaskWidget').then(m => ({ default: m.AddTaskWidget })));
 const CompletedView = lazy(() => import('./components/CompletedView').then(m => ({ default: m.CompletedView })));
 
-import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff, SlidersHorizontal } from 'lucide-react';
+import { Inbox, Plus, Mic, X, Wifi, WifiOff, Eye, EyeOff, SlidersHorizontal, Menu, CheckSquare, CalendarDays, Timer, BarChart2 } from 'lucide-react';
 import { isToday, isFuture, parseISO, format, addDays } from 'date-fns';
 import { useTodo } from './context/TodoContext';
 import { parseTimezoneOffset } from './utils/timezone';
@@ -131,6 +131,20 @@ function App() {
 
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('showFilters') === 'true');
   const [activeDragSectionId, setActiveDragSectionId] = useState(null);
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const activeListObj = lists ? lists.find(l => l.id === activeList) : null;
+  const isActiveListNote = activeListObj ? activeListObj.type === 'note' : false;
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
 
   const toggleFilters = () => {
@@ -278,15 +292,19 @@ function App() {
       
       let sidebarBg = '#f1f3f5';
       let paneBg = '#ffffff';
+      let globalSidebarBg = '#e9ecef';
       if (savedBg === '#f0f4f8') {
         sidebarBg = '#e2e8f0';
         paneBg = '#ffffff';
+        globalSidebarBg = '#d0d7de';
       } else if (savedBg === '#f4fbf7') {
         sidebarBg = '#e6f4ea';
         paneBg = '#ffffff';
+        globalSidebarBg = '#d1e7dd';
       }
       document.documentElement.style.setProperty('--sidebar-bg', sidebarBg);
       document.documentElement.style.setProperty('--right-pane-bg', paneBg);
+      document.documentElement.style.setProperty('--global-sidebar-bg', globalSidebarBg);
     } else {
       document.documentElement.style.setProperty('--text-primary', '#e0e0e0');
       document.documentElement.style.setProperty('--text-secondary', '#9e9e9e');
@@ -294,15 +312,19 @@ function App() {
       
       let sidebarBg = '#1c1c1c';
       let paneBg = '#1e1e1e';
+      let globalSidebarBg = '#0d0d0d';
       if (savedBg === '#050505') {
         sidebarBg = '#0c0c0d';
         paneBg = '#0f0f10';
+        globalSidebarBg = '#000000';
       } else if (savedBg === '#0B0F19') {
         sidebarBg = '#111827';
         paneBg = '#1f2937';
+        globalSidebarBg = '#080c14';
       }
       document.documentElement.style.setProperty('--sidebar-bg', sidebarBg);
       document.documentElement.style.setProperty('--right-pane-bg', paneBg);
+      document.documentElement.style.setProperty('--global-sidebar-bg', globalSidebarBg);
     }
   }, [token]);
 
@@ -489,8 +511,11 @@ function App() {
       <GlobalSidebar />
 
       <div className="app-container">
+        {isMobile && isSidebarOpen && (
+          <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+        )}
         {mainView === 'tasks' && (
-          <Sidebar />
+          <Sidebar mobileOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         )}
         
         <main className={`main-content ${selectedTaskId || selectedSubtaskId ? 'pane-open' : ''}`}>
@@ -514,185 +539,265 @@ function App() {
                     <CompletedView />
                   ) : (
                     <>
-              <header className="header ticktick-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <h1 style={{ marginBottom: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {activeTagFilter ? `Etiqueta: #${activeTagFilter}` : getHeaderTitle()}
-                  </h1>
-                  {activeTagFilter && (
+              {isMobile ? (
+                <div className="mobile-top-header">
+                  <div className="mobile-header-left">
                     <button 
-                      onClick={() => setActiveTagFilter(null)}
-                      className="clear-tag-filter-btn"
+                      className="mobile-menu-trigger" 
+                      onClick={() => setIsSidebarOpen(true)}
+                      title="Abrir menú"
+                      type="button"
+                    >
+                      <Menu size={20} />
+                    </button>
+                    <h1 className="mobile-header-title">
+                      {activeTagFilter ? `#${activeTagFilter}` : getHeaderTitle()}
+                    </h1>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {typeof activeList === 'number' && (
+                      <button
+                        onClick={() => setProjectLayout(prev => prev === 'list' ? 'kanban' : 'list')}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '28px',
+                          height: '28px',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.8rem'
+                        }}
+                        title={projectLayout === 'list' ? "Ver como Kanban" : "Ver como Lista"}
+                      >
+                        {projectLayout === 'list' ? "📊" : "📋"}
+                      </button>
+                    )}
+                    {activeList === 'today' && (
+                      <button
+                        onClick={handleReadAgendaAloud}
+                        style={{
+                          background: isReadingAgenda ? 'rgba(239, 68, 68, 0.1)' : 'rgba(124, 58, 237, 0.1)',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '28px',
+                          height: '28px',
+                          color: isReadingAgenda ? 'var(--danger-color)' : 'var(--accent-hover)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title={isReadingAgenda ? "Detener lectura" : "Escuchar agenda"}
+                      >
+                        {isReadingAgenda ? "⏹️" : "🔊"}
+                      </button>
+                    )}
+                    <button 
+                      onClick={toggleFilters}
+                      title={showFilters ? "Ocultar filtros" : "Mostrar filtros"}
                       style={{
-                        background: 'rgba(255, 255, 255, 0.08)',
+                        background: showFilters ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                        border: showFilters ? '1px solid var(--accent-hover, #7c3aed)' : 'none',
+                        borderRadius: '50%',
+                        width: '28px',
+                        height: '28px',
+                        color: showFilters ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <SlidersHorizontal size={14} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <header className="header ticktick-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <h1 style={{ marginBottom: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeTagFilter ? `Etiqueta: #${activeTagFilter}` : getHeaderTitle()}
+                    </h1>
+                    {activeTagFilter && (
+                      <button 
+                        onClick={() => setActiveTagFilter(null)}
+                        className="clear-tag-filter-btn"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: 'none',
+                          borderRadius: '12px',
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s',
+                          marginLeft: '8px'
+                        }}
+                      >
+                        Limpiar filtro <X size={12} />
+                      </button>
+                    )}
+                    <button 
+                      onClick={toggleFilters}
+                      title={showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+                      style={{
+                        background: showFilters ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                        border: showFilters ? '1px solid var(--accent-hover, #7c3aed)' : 'none',
+                        borderRadius: '50%',
+                        width: '28px',
+                        height: '28px',
+                        color: showFilters ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                        marginLeft: 'auto',
+                        position: 'relative'
+                      }}
+                      onMouseEnter={e => { if (!showFilters) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                      onMouseLeave={e => { if (!showFilters) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                    >
+                      <SlidersHorizontal size={14} />
+                      {!showFilters && (filterPriority !== null || filterTagId !== null || !filterHideCompleted) && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '-2px',
+                          right: '-2px',
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          background: 'var(--accent-hover, #7c3aed)',
+                          border: '1px solid var(--bg-primary, #121212)'
+                        }} />
+                      )}
+                    </button>
+
+                    <button 
+                      onClick={() => setIsShortcutsModalOpen(true)}
+                      title="Atajos de teclado (?)"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.05)',
                         border: 'none',
-                        borderRadius: '12px',
-                        padding: '4px 10px',
-                        fontSize: '0.75rem',
+                        borderRadius: '50%',
+                        width: '28px',
+                        height: '28px',
                         color: 'var(--text-secondary)',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
+                        justifyContent: 'center',
                         transition: 'all 0.2s',
                         marginLeft: '8px'
                       }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                     >
-                      Limpiar filtro <X size={12} />
+                      ⌨️
                     </button>
-                  )}
-                  <button 
-                    onClick={toggleFilters}
-                    title={showFilters ? "Ocultar filtros" : "Mostrar filtros"}
-                    style={{
-                      background: showFilters ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                      border: showFilters ? '1px solid var(--accent-hover, #7c3aed)' : 'none',
-                      borderRadius: '50%',
-                      width: '28px',
-                      height: '28px',
-                      color: showFilters ? 'var(--accent-hover, #7c3aed)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      marginLeft: 'auto',
-                      position: 'relative'
-                    }}
-                    onMouseEnter={e => { if (!showFilters) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-                    onMouseLeave={e => { if (!showFilters) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-                  >
-                    <SlidersHorizontal size={14} />
-                    {!showFilters && (filterPriority !== null || filterTagId !== null || !filterHideCompleted) && (
-                      <span style={{
-                        position: 'absolute',
-                        top: '-2px',
-                        right: '-2px',
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        background: 'var(--accent-hover, #7c3aed)',
-                        border: '1px solid var(--bg-primary, #121212)'
-                      }} />
+                    
+                    {activeList === 'today' && (
+                      <button
+                        onClick={handleReadAgendaAloud}
+                        className={`agenda-voice-reader-btn ${isReadingAgenda ? 'reading' : ''}`}
+                        style={{
+                          background: isReadingAgenda ? 'rgba(239, 68, 68, 0.1)' : 'rgba(124, 58, 237, 0.1)',
+                          border: isReadingAgenda ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(124, 58, 237, 0.25)',
+                          borderRadius: '20px',
+                          padding: '6px 14px',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: isReadingAgenda ? 'var(--danger-color)' : 'var(--accent-hover)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s ease',
+                          boxShadow: isReadingAgenda ? '0 2px 8px rgba(239, 68, 68, 0.1)' : '0 2px 8px rgba(124, 58, 237, 0.1)'
+                        }}
+                        title={isReadingAgenda ? "Detener lectura" : "Escuchar resumen de mi agenda de hoy"}
+                      >
+                        {isReadingAgenda ? (
+                          <>
+                            <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.1s' }}></span>
+                            <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.3s', height: '14px' }}></span>
+                            <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.2s' }}></span>
+                            <span>Detener Lectura</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🔊 Escuchar Agenda</span>
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
-
-                  <button 
-                    onClick={() => setIsShortcutsModalOpen(true)}
-                    title="Atajos de teclado (?)"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '28px',
-                      height: '28px',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      marginLeft: '8px'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                  >
-                    ⌨️
-                  </button>
-                  
-                  {activeList === 'today' && (
-                    <button
-                      onClick={handleReadAgendaAloud}
-                      className={`agenda-voice-reader-btn ${isReadingAgenda ? 'reading' : ''}`}
-                      style={{
-                        background: isReadingAgenda ? 'rgba(239, 68, 68, 0.1)' : 'rgba(124, 58, 237, 0.1)',
-                        border: isReadingAgenda ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(124, 58, 237, 0.25)',
-                        borderRadius: '20px',
-                        padding: '6px 14px',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: isReadingAgenda ? 'var(--danger-color)' : 'var(--accent-hover)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s ease',
-                        boxShadow: isReadingAgenda ? '0 2px 8px rgba(239, 68, 68, 0.1)' : '0 2px 8px rgba(124, 58, 237, 0.1)'
-                      }}
-                      title={isReadingAgenda ? "Detener lectura" : "Escuchar resumen de mi agenda de hoy"}
-                    >
-                      {isReadingAgenda ? (
-                        <>
-                          <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.1s' }}></span>
-                          <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.3s', height: '14px' }}></span>
-                          <span className="voice-bar" style={{ backgroundColor: 'var(--danger-color)', animationDelay: '0.2s' }}></span>
-                          <span>Detener Lectura</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>🔊 Escuchar Agenda</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-                
-                {typeof activeList === 'number' && (
-                  <div style={{
-                    display: 'flex',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid var(--border-color)',
-                    padding: '3px',
-                    borderRadius: '8px',
-                    gap: '2px'
-                  }}>
-                    <button
-                      onClick={() => setProjectLayout('list')}
-                      style={{
-                        background: projectLayout === 'list' ? 'var(--accent-hover)' : 'transparent',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: projectLayout === 'list' ? '#ffffff' : 'var(--text-secondary)',
-                        padding: '6px 14px',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      📋 Lista
-                    </button>
-                    <button
-                      onClick={() => setProjectLayout('kanban')}
-                      style={{
-                        background: projectLayout === 'kanban' ? 'var(--accent-hover)' : 'transparent',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: projectLayout === 'kanban' ? '#ffffff' : 'var(--text-secondary)',
-                        padding: '6px 14px',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      📊 Kanban
-                    </button>
                   </div>
-                )}
-              </header>
+                  
+                  {typeof activeList === 'number' && (
+                    <div style={{
+                      display: 'flex',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid var(--border-color)',
+                      padding: '3px',
+                      borderRadius: '8px',
+                      gap: '2px'
+                    }}>
+                      <button
+                        onClick={() => setProjectLayout('list')}
+                        style={{
+                          background: projectLayout === 'list' ? 'var(--accent-hover)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: projectLayout === 'list' ? '#ffffff' : 'var(--text-secondary)',
+                          padding: '6px 14px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        📋 Lista
+                      </button>
+                      <button
+                        onClick={() => setProjectLayout('kanban')}
+                        style={{
+                          background: projectLayout === 'kanban' ? 'var(--accent-hover)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: projectLayout === 'kanban' ? '#ffffff' : 'var(--text-secondary)',
+                          padding: '6px 14px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        📊 Kanban
+                      </button>
+                    </div>
+                  )}
+                </header>
+              )}
 
               <form className="quick-add-bar" onSubmit={handleQuickAdd} style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
                 <Plus size={18} className="quick-add-icon" />
                 <input 
                   type="text" 
-                  placeholder="Add Task" 
+                  placeholder={isActiveListNote ? "Añadir Nota..." : "Add Task"} 
                   value={quickAddTitle}
                   onChange={e => setQuickAddTitle(e.target.value)}
                   style={{ flex: 1 }}
@@ -1435,8 +1540,24 @@ function App() {
             onUpdatePriority={handleUpdateTaskPriority}
             onMoveToList={handleUpdateTaskList}
             onReschedule={handleRescheduleTask}
+            onUpdateTask={handleUpdateTask}
             onStartPomodoro={handleStartPomodoroFocus}
             onDelete={handleDeleteTask}
+            onOpenDetails={(taskId) => {
+              setSelectedTaskId(taskId);
+            }}
+            onDuplicate={async (targetTask) => {
+              await handleAddTask({
+                title: targetTask.title + ' (Copia)',
+                list_id: targetTask.list_id,
+                priority: targetTask.priority,
+                due_date: targetTask.due_date,
+                description: targetTask.description,
+                tags: targetTask.tags ? targetTask.tags.map(t => t.name) : []
+              });
+              showToast('Tarea duplicada con éxito');
+            }}
+            showToast={showToast}
           />
         )}
 
@@ -1501,6 +1622,50 @@ function App() {
           </div>
         )}
 
+        {isMobile && (
+          <div className="mobile-bottom-nav">
+            <button 
+              className={`mobile-bottom-nav-item ${mainView === 'tasks' ? 'active' : ''}`}
+              onClick={() => {
+                setMainView('tasks');
+                setIsSidebarOpen(false);
+              }}
+            >
+              <CheckSquare />
+              <span>Tareas</span>
+            </button>
+            <button 
+              className={`mobile-bottom-nav-item ${mainView === 'calendar' ? 'active' : ''}`}
+              onClick={() => {
+                setMainView('calendar');
+                setIsSidebarOpen(false);
+              }}
+            >
+              <CalendarDays />
+              <span>Calendario</span>
+            </button>
+            <button 
+              className={`mobile-bottom-nav-item ${mainView === 'pomodoro' ? 'active' : ''}`}
+              onClick={() => {
+                setMainView('pomodoro');
+                setIsSidebarOpen(false);
+              }}
+            >
+              <Timer />
+              <span>Enfoque</span>
+            </button>
+            <button 
+              className={`mobile-bottom-nav-item ${mainView === 'analytics' ? 'active' : ''}`}
+              onClick={() => {
+                setMainView('analytics');
+                setIsSidebarOpen(false);
+              }}
+            >
+              <BarChart2 />
+              <span>Métricas</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
