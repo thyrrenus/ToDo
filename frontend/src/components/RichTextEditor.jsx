@@ -106,6 +106,28 @@ const ImageNode = Node.create({
   },
 });
 
+const AlertNode = Node.create({
+  name: 'alert',
+  group: 'block',
+  content: 'block*',
+  defining: true,
+  addAttributes() {
+    return {
+      type: {
+        default: 'info',
+        parseHTML: element => element.getAttribute('data-type') || 'info',
+        renderHTML: attributes => ({ 'data-type': attributes.type }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', { class: `editor-alert-block type-${HTMLAttributes['data-type'] || 'info'}`, ...HTMLAttributes }, 0];
+  },
+});
+
 // Custom React component for the code block NodeView
 export function CodeBlockComponent({ node, updateAttributes }) {
   const [copied, setCopied] = useState(false);
@@ -168,7 +190,13 @@ const slashCommands = [
   { key: 'table', label: 'Tabla', desc: 'Insertar tabla de 3x3', category: 'Avanzado', type: 'action', action: 'table' },
   { key: 'image', label: 'Imagen', desc: 'Subir una imagen', category: 'Avanzado', type: 'action', action: 'image' },
   { key: 'divider', label: 'Línea divisora', desc: 'Línea horizontal sutil', category: 'Avanzado', type: 'action', action: 'divider' },
-  { key: 'clean', label: 'Limpiar formato', desc: 'Quita todo el formato', category: 'Avanzado', type: 'action', action: 'clean' }
+  { key: 'clean', label: 'Limpiar formato', desc: 'Quita todo el formato', category: 'Avanzado', type: 'action', action: 'clean' },
+  { key: 'alerta-info', label: 'Alerta Azul (Info)', desc: 'Bloque de alerta azul con ícono', category: 'Alertas', type: 'action', action: 'alert-info' },
+  { key: 'alerta-warning', label: 'Alerta Amarilla (Advertencia)', desc: 'Bloque de alerta amarillo con ícono', category: 'Alertas', type: 'action', action: 'alert-warning' },
+  { key: 'alerta-success', label: 'Alerta Verde (Éxito)', desc: 'Bloque de alerta verde con ícono', category: 'Alertas', type: 'action', action: 'alert-success' },
+  { key: 'alerta-danger', label: 'Alerta Roja (Peligro)', desc: 'Bloque de alerta rojo con ícono', category: 'Alertas', type: 'action', action: 'alert-danger' },
+  { key: 'subtask', label: 'Subtarea', desc: 'Crear una subtarea directamente', category: 'Avanzado', type: 'action', action: 'subtask' },
+  { key: 'emoji', label: 'Emoji', desc: 'Abrir selector de emojis', category: 'Avanzado', type: 'action', action: 'emoji' }
 ];
 
 const emojiList = [
@@ -740,10 +768,12 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       const charBeforeColon = colonIndex > 0 ? textBeforeCursor[colonIndex - 1] : ' ';
       if (charBeforeColon === ' ' || charBeforeColon === '\n') {
         const query = textBeforeCursor.slice(colonIndex + 1);
-        if (!query.includes(' ') && query.length > 0) {
+        if (!query.includes(' ')) {
           setEmojiQuery(query);
           setEmojiMenuPosition(menuPos);
           setShowEmojiMenu(true);
+          setShowSlashMenu(false);
+          setShowHashMenu(false);
           return;
         }
       }
@@ -830,6 +860,7 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
       DetailsNode,
       SummaryNode,
       ImageNode,
+      AlertNode,
     ],
     content: value || '',
     editorProps: {
@@ -1144,6 +1175,25 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         triggerImageUpload();
       } else if (option.action === 'clean') {
         editor.chain().focus().unsetAllMarks().clearNodes().run();
+      } else if (option.action === 'alert-info') {
+        editor.chain().focus().insertContent('<div data-type="info"><p>💡 Escribe aquí el mensaje de alerta...</p></div>').run();
+      } else if (option.action === 'alert-warning') {
+        editor.chain().focus().insertContent('<div data-type="warning"><p>⚠️ Escribe aquí el mensaje de advertencia...</p></div>').run();
+      } else if (option.action === 'alert-success') {
+        editor.chain().focus().insertContent('<div data-type="success"><p>✅ Escribe aquí el mensaje de éxito...</p></div>').run();
+      } else if (option.action === 'alert-danger') {
+        editor.chain().focus().insertContent('<div data-type="danger"><p>🚨 Escribe aquí el mensaje de peligro...</p></div>').run();
+      } else if (option.action === 'subtask') {
+        if (!onCreateSubtaskRef.current) {
+          alert('Las subtareas solo se pueden crear dentro del panel de detalles de una tarea.');
+        } else {
+          const title = window.prompt('Escribe el título de la subtarea:');
+          if (title && title.trim()) {
+            onCreateSubtaskRef.current(title.trim());
+          }
+        }
+      } else if (option.action === 'emoji') {
+        editor.chain().focus().insertContent(':').run();
       }
     }
 
@@ -1260,6 +1310,12 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
               {opt.key === 'image' && <span style={{ color: '#3b82f6' }}>🖼️</span>}
               {opt.key === 'divider' && <span style={{ color: '#8e95a5' }}>—</span>}
               {opt.key === 'clean' && <span style={{ color: '#ef4444' }}>✕</span>}
+              {opt.key === 'alerta-info' && <span style={{ color: '#3b82f6' }}>💡</span>}
+              {opt.key === 'alerta-warning' && <span style={{ color: '#f97316' }}>⚠️</span>}
+              {opt.key === 'alerta-success' && <span style={{ color: '#22c55e' }}>✅</span>}
+              {opt.key === 'alerta-danger' && <span style={{ color: '#ef4444' }}>🚨</span>}
+              {opt.key === 'subtask' && <span style={{ color: '#8e95a5' }}>↳</span>}
+              {opt.key === 'emoji' && <span style={{ color: '#eab308' }}>😀</span>}
             </div>
             <div className="slash-command-text">
               <span className="slash-command-label">{opt.label}</span>

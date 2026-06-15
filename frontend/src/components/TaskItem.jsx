@@ -8,7 +8,14 @@ export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubta
   const [isExpanded, setIsExpanded] = useState(false);
   const [localSyncingSubtaskIds, setLocalSyncingSubtaskIds] = useState(new Set());
 
+  if (!task) return null;
+
   const isCompleted = task.is_completed === 1 || task.is_completed === true;
+  const isOverdue = task.due_date && !isCompleted && new Date(task.due_date.split('T')[0]) < new Date(new Date().toISOString().split('T')[0]);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const deadlineStr = task.deadline_date && typeof task.deadline_date === 'string' ? task.deadline_date.split('T')[0] : null;
+  const isDeadlineExceeded = !!(deadlineStr && !isCompleted && deadlineStr < todayStr);
+  const isDeadlineToday = !!(deadlineStr && !isCompleted && deadlineStr === todayStr);
   const subtasks = task.subtasks || [];
   const totalSubtasks = subtasks.length;
   const completedSubtasks = subtasks.filter(st => st.is_completed === 1 || st.is_completed === true).length;
@@ -89,7 +96,14 @@ export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubta
           onContextMenu(e, task);
         }
       }}
-      style={{ cursor: 'grab' }}
+      style={{ 
+        cursor: 'grab',
+        borderLeft: isDeadlineExceeded 
+          ? '3px solid var(--danger-color)' 
+          : isDeadlineToday 
+            ? '3px solid #f59e0b' 
+            : '3px solid transparent'
+      }}
     >
       <div className="task-item-main-row">
         <div 
@@ -188,9 +202,34 @@ export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubta
                 </div>
               )}
               {task.due_date && (
-                <div className="task-meta-item">
+                <div className="task-meta-item" style={isOverdue ? { color: 'var(--danger-color)', backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' } : {}}>
                   <CalendarIcon size={12} /> 
                   {format(parseISO(task.due_date), 'MMM d')}
+                </div>
+              )}
+              {task.deadline_date && (
+                <div 
+                  className="task-meta-item" 
+                  style={
+                    isDeadlineExceeded 
+                      ? { color: 'var(--danger-color)', backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.25)', fontWeight: 700 } 
+                      : isDeadlineToday 
+                        ? { color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.25)', fontWeight: 700 } 
+                        : { opacity: 0.75 }
+                  }
+                >
+                  <span>🚨 Límite: {isDeadlineToday ? 'Hoy' : (() => {
+                    try {
+                      return format(parseISO(task.deadline_date), 'MMM d');
+                    } catch (e) {
+                      return task.deadline_date;
+                    }
+                  })()}</span>
+                </div>
+              )}
+              {task.estimated_effort > 0 && (
+                <div className="task-meta-item" style={{ opacity: 0.8, color: 'var(--text-secondary)' }}>
+                  <span>⏱️ {task.estimated_effort}h</span>
                 </div>
               )}
               {totalSubtasks > 0 && (

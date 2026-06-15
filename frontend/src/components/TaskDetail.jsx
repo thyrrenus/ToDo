@@ -63,6 +63,8 @@ export function TaskDetail() {
   const [dueDate, setDueDate] = useState(currentItem?.due_date ? formatDateForInput(currentItem.due_date) : '');
   const [startTime, setStartTime] = useState(currentItem?.start_time ? formatDateTimeForInput(currentItem.start_time) : '');
   const [endTime, setEndTime] = useState(currentItem?.end_time ? formatDateTimeForInput(currentItem.end_time) : '');
+  const [deadlineDate, setDeadlineDate] = useState(currentItem?.deadline_date ? formatDateForInput(currentItem.deadline_date) : '');
+  const [estimatedEffort, setEstimatedEffort] = useState(currentItem?.estimated_effort || 0);
   const [expandedSubtaskId, setExpandedSubtaskId] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiProgress, setAiProgress] = useState(null);
@@ -339,6 +341,8 @@ export function TaskDetail() {
       setStartTime(sTime);
       setEndTime(eTime);
       setAllDay(!task.start_time);
+      setDeadlineDate(task.deadline_date ? formatDateForInput(task.deadline_date) : '');
+      setEstimatedEffort(task.estimated_effort || 0);
 
       if (sTime && sTime.includes('T')) {
         const time = sTime.split('T')[1];
@@ -434,6 +438,8 @@ export function TaskDetail() {
         due_date: dueDate || null,
         start_time: startTime || null,
         end_time: endTime || null,
+        deadline_date: deadlineDate || null,
+        estimated_effort: parseFloat(estimatedEffort) || 0,
         ...fields
       };
 
@@ -678,8 +684,13 @@ export function TaskDetail() {
       try {
         return format(parseISO(dueDate), 'MMM d');
       } catch (e) {
-        return 'Date and Reminder';
+        // ignore
       }
+    }
+    if (deadlineDate) {
+      try {
+        return `🚨 Límite: ${format(parseISO(deadlineDate), 'MMM d')}`;
+      } catch (e) {}
     }
     return 'Date and Reminder';
   };
@@ -797,6 +808,8 @@ export function TaskDetail() {
           setEndTime(formattedDate);
         }
       }
+    } else if (activeTab === 'deadline') {
+      setDeadlineDate(formattedDate);
     } else {
       // Duration range selection
       const currentStartDateStr = startTime ? (startTime.includes('T') ? startTime.split('T')[0] : startTime) : '';
@@ -913,6 +926,11 @@ export function TaskDetail() {
           end_time: finalEndTime
         });
       }
+    } else if (activeTab === 'deadline') {
+      handleUpdate({
+        deadline_date: deadlineDate || null,
+        estimated_effort: parseFloat(estimatedEffort) || 0
+      });
     } else {
       // duration range mode
       if (startTime) {
@@ -929,15 +947,24 @@ export function TaskDetail() {
   };
 
   const handleClearDates = () => {
-    setDueDate('');
-    setStartTime('');
-    setEndTime('');
-    setHasTime(false);
-    handleUpdate({
-      due_date: null,
-      start_time: null,
-      end_time: null
-    });
+    if (activeTab === 'deadline') {
+      setDeadlineDate('');
+      setEstimatedEffort(0);
+      handleUpdate({
+        deadline_date: null,
+        estimated_effort: 0
+      });
+    } else {
+      setDueDate('');
+      setStartTime('');
+      setEndTime('');
+      setHasTime(false);
+      handleUpdate({
+        due_date: null,
+        start_time: null,
+        end_time: null
+      });
+    }
     setShowDatePicker(false);
   };
 
@@ -1099,7 +1126,7 @@ export function TaskDetail() {
               }}>
                 <div className="date-reminder-wrapper" ref={popoverRef} style={{ display: 'inline-block' }}>
                   <button 
-                    className={`date-reminder-trigger-btn ${dueDate || startTime ? 'has-date' : ''}`}
+                    className={`date-reminder-trigger-btn ${dueDate || startTime ? 'has-date' : ''} ${deadlineDate ? 'has-deadline' : ''}`}
                     onClick={() => setShowDatePicker(!showDatePicker)}
                   >
                     <CalendarIcon size={15} />
@@ -1121,6 +1148,12 @@ export function TaskDetail() {
                           onClick={() => setActiveTab('duration')}
                         >
                           Duración
+                        </button>
+                        <button 
+                          className={`popover-tab-btn ${activeTab === 'deadline' ? 'active' : ''}`}
+                          onClick={() => setActiveTab('deadline')}
+                        >
+                          Límite
                         </button>
                       </div>
 
@@ -1167,9 +1200,11 @@ export function TaskDetail() {
                             const isRangeBetween = activeTab === 'duration' && currentStartDateStr && currentEndDateStr && 
                                                    formattedCompare > currentStartDateStr && formattedCompare < currentEndDateStr;
 
-                            const isSelected = activeTab === 'date' 
-                              ? (dueDate === formattedCompare) 
-                              : (isRangeStart || isRangeEnd);
+                             const isSelected = activeTab === 'date' 
+                               ? (dueDate === formattedCompare) 
+                               : activeTab === 'deadline'
+                                 ? (deadlineDate === formattedCompare)
+                                 : (isRangeStart || isRangeEnd);
 
                             return (
                               <button
@@ -1184,7 +1219,7 @@ export function TaskDetail() {
                         </div>
 
                         {/* Tab-Specific Options */}
-                        {activeTab === 'date' ? (
+                        {activeTab === 'date' && (
                           <div className="date-tab-content">
                             {/* Quick Select Panel */}
                             <div className="quick-select-panel">
@@ -1235,7 +1270,9 @@ export function TaskDetail() {
                               )}
                             </div>
                           </div>
-                        ) : (
+                        )}
+
+                        {activeTab === 'duration' && (
                           <div className="duration-tab-content" style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
                             {/* Resumen de Rango */}
                             <div className="duration-range-summary" style={{ background: 'rgba(0,0,0,0.15)', borderRadius: '8px', padding: '10px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1292,6 +1329,48 @@ export function TaskDetail() {
                           </div>
                         )}
 
+                        {activeTab === 'deadline' && (
+                          <div className="deadline-tab-content" style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {/* Summary of Deadline */}
+                            <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '8px', padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>🚨 Límite Estricto:</span>
+                              <span style={{ color: '#ef4444', fontWeight: 700 }}>
+                                {deadlineDate ? format(parseISO(deadlineDate), 'dd MMM yyyy') : 'Sin definir'}
+                              </span>
+                            </div>
+
+                            {/* Estimated Effort Input */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>⏱️ Esfuerzo Estimado:</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={estimatedEffort || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                    setEstimatedEffort(val);
+                                  }}
+                                  placeholder="0.0"
+                                  style={{
+                                    background: 'rgba(0, 0, 0, 0.2)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '8px',
+                                    color: 'var(--text-primary)',
+                                    padding: '6px 10px',
+                                    fontSize: '0.8rem',
+                                    width: '80px',
+                                    outline: 'none',
+                                    fontFamily: 'inherit'
+                                  }}
+                                />
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Horas de esfuerzo</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Actions */}
                         <div className="popover-actions" style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button className="popover-action-btn ok-btn" onClick={handleApplyDuration}>
@@ -1305,6 +1384,8 @@ export function TaskDetail() {
                     </div>
                   )}
                 </div>
+
+
 
                 {/* Section Selector */}
                 {sections.filter(s => s.list_id === task.list_id).length > 0 && (

@@ -191,6 +191,40 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     title = title.replace(/\b(?:de lunes a viernes|días laborables|dias laborables|días de semana|dias de semana)\b/i, '');
   }
 
+  // 6. Extract effort (e.g. esfuerzo 3h, esfuerzo 2.5 horas)
+  let estimated_effort = 0;
+  const effortMatch = /\b(?:esfuerzo)\s+(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hora|horas)\b/i.exec(title);
+  if (effortMatch) {
+    estimated_effort = parseFloat(effortMatch[1]);
+    title = title.replace(effortMatch[0], '');
+  }
+
+  // 7. Extract deadline (e.g. limite hoy, limite mañana, limite 20-jun, limite 20/06)
+  let deadline_date = null;
+  const deadlineMatch = /\b(?:límite|limite)\s+(hoy|mañana|mañana|\d{4}-\d{2}-\d{2}|\d{1,2}[\-\/\s]\d{1,2}[\-\/\s]\d{4}|\d{1,2}[\-\/\s]\d{1,2})\b/i.exec(title);
+  if (deadlineMatch) {
+    const val = deadlineMatch[1].toLowerCase();
+    if (val === 'hoy') {
+      deadline_date = format(new Date(), 'yyyy-MM-dd');
+    } else if (val === 'mañana' || val === 'manana') {
+      deadline_date = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      deadline_date = val;
+    } else {
+      const parts = val.split(/[\-\/\s]/);
+      if (parts.length >= 2) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parts.length === 3 ? parseInt(parts[2], 10) : new Date().getFullYear();
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) {
+          deadline_date = format(d, 'yyyy-MM-dd');
+        }
+      }
+    }
+    title = title.replace(deadlineMatch[0], '');
+  }
+
   // Clean remaining extra spaces in title
   title = title.replace(/\s+/g, ' ').trim();
   if (!title) {
@@ -205,7 +239,9 @@ function parseNLPQuickAdd(inputTitle, lists, activeList) {
     start_time,
     end_time,
     tags,
-    recurrence_type
+    recurrence_type,
+    deadline_date,
+    estimated_effort
   };
 }
 
@@ -1089,6 +1125,8 @@ export function TodoProvider({ children }) {
         setQuickAddTitle('');
         fetchTasks();
         fetchTags();
+        const createdTask = await res.json();
+        return createdTask;
       }
     } catch (err) {
       console.error(err);

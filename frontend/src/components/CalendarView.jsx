@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { startOfWeek, addDays, format, isSameDay, parseISO, getHours, getMinutes, differenceInMinutes, startOfToday } from 'date-fns';
+import { useState, useEffect, useRef } from 'react';
+import { startOfWeek, addDays, format, isSameDay, parseISO, getHours, getMinutes, differenceInMinutes, startOfToday, addMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { adjustExternalDate } from '../utils/timezone';
 import { useTodo } from '../context/TodoContext';
+import { Sparkles, AlertTriangle, Check, X, Info, Plus } from 'lucide-react';
 
 export function CalendarView() {
   const { 
@@ -26,9 +27,31 @@ export function CalendarView() {
     setSelectedTaskId(id);
     setSelectedSubtaskId(null);
   };
-  const [viewMode, setViewMode] = useState('week'); // 'day' or 'week'
+  const [viewMode, setViewMode] = useState('week'); // 'day', 'week', or 'month'
   const [currentDate, setCurrentDate] = useState(startOfToday());
+
+  const [showAIRescheduleModal, setShowAIRescheduleModal] = useState(false);
+  const [rescheduleProposal, setRescheduleProposal] = useState([]);
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
+  const [includeWeekends, setIncludeWeekends] = useState(false);
   const [interactionState, setInteractionState] = useState(null);
+  const [dragCreateState, setDragCreateState] = useState(null);
+  const [dragOverDay, setDragOverDay] = useState(null);
+  const [draggingEventId, setDraggingEventId] = useState(null);
+  const justDraggedRef = useRef(false);
+  const dragCreateRef = useRef(null);
+
+  const getMonthDays = (date) => {
+    const monthStart = startOfMonth(date);
+    const startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
+    const daysArr = [];
+    let d = new Date(startDate);
+    for (let i = 0; i < 42; i++) {
+      daysArr.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return daysArr;
+  };
 
   // local states for aesthetics & interactivity
   const [now, setNow] = useState(new Date());
@@ -50,7 +73,7 @@ export function CalendarView() {
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
-  const days = viewMode === 'week' ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : [currentDate];
+  const days = viewMode === 'week' ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : viewMode === 'day' ? [currentDate] : getMonthDays(currentDate);
 
   const PIXELS_PER_HOUR = 60; // 60px per hour
 
@@ -245,6 +268,7 @@ export function CalendarView() {
 
   // Cell quick create handler
   const handleCellClick = (e, day, hour) => {
+    if (justDraggedRef.current) return;
     if (e.target.classList.contains('grid-cell')) {
       const container = document.querySelector('.calendar-view');
       if (container) {
@@ -252,7 +276,7 @@ export function CalendarView() {
         let x = e.clientX - rect.left;
         let y = e.clientY - rect.top;
 
-        const popWidth = 240;
+        const popWidth = 280;
         const popHeight = 180;
         if (x + popWidth > rect.width) {
           x = x - popWidth;
@@ -277,17 +301,181 @@ export function CalendarView() {
     }
   };
 
+  // Drag-to-Create handler inside daily/weekly columns
+  const handleColumnMouseDown = (e, day) => {
+    if (e.button !== 0) return; // Only left click
+
+    // Only start drag if clicking directly on a grid cell or column background
+    if (!e.target.classList.contains('grid-cell') && !e.target.classList.contains('day-column')) {
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickY = e.clientY - rect.top;
+
+    // Snap to 15-minute intervals (15px)
+    const snapHeight = 15;
+    const initialSnappedY = Math.round(clickY / snapHeight) * snapHeight;
+
+    const dragData = {
+      day,
+      startY: initialSnappedY,
+      currentY: initialSnappedY,
+      columnRect: rect
+    };
+
+    dragCreateRef.current = dragData;
+    setDragCreateState(dragData);
+
+    setContextMenu(null);
+    setQuickCreate(null);
+  };
+
+  // Window mouse movement listener for drag-create
+  useEffect(() => {
+    if (!dragCreateState) return;
+
+    const handleMouseMove = (e) => {
+      if (!dragCreateRef.current) return;
+      const currentYRaw = e.clientY - dragCreateRef.current.columnRect.top;
+      const snapHeight = 15;
+      const snappedY = Math.max(
+        0,
+        Math.min(
+          Math.round(currentYRaw / snapHeight) * snapHeight,
+          24 * PIXELS_PER_HOUR
+        )
+      );
+
+      dragCreateRef.current.currentY = snappedY;
+      setDragCreateState({ ...dragCreateRef.current });
+    };
+
+    const handleMouseUp = (e) => {
+      const dragData = dragCreateRef.current;
+      if (dragData) {
+        const startY = Math.min(dragData.startY, dragData.currentY);
+        const endY = Math.max(dragData.startY, dragData.currentY);
+        const dragDuration = endY - startY;
+
+        if (dragDuration >= 15) {
+          const startTotalMinutes = startY;
+          const startHour = Math.floor(startTotalMinutes / 60);
+          const startMin = Math.round(startTotalMinutes % 60);
+
+          const endTotalMinutes = endY;
+          const endHour = Math.floor(endTotalMinutes / 60);
+          const endMin = Math.round(endTotalMinutes % 60);
+
+          const container = document.querySelector('.calendar-view');
+          if (container) {
+            const containerRect = container.getBoundingClientRect();
+            let x = e.clientX - containerRect.left;
+            let y = e.clientY - containerRect.top;
+
+            const popWidth = 280;
+            const popHeight = 180;
+            if (x + popWidth > containerRect.width) {
+              x = x - popWidth;
+            }
+            if (y + popHeight > containerRect.height) {
+              y = y - popHeight;
+            }
+
+            setQuickCreate({
+              day: dragData.day,
+              hour: startHour,
+              startHour,
+              startMin,
+              endHour,
+              endMin,
+              x,
+              y
+            });
+            setQuickTitle('');
+            setQuickListId(lists[0]?.id || '');
+            setQuickPriority('0');
+            setQuickRecurrence('none');
+
+            // Set temporary flag to ignore subsequent click event on the cell
+            justDraggedRef.current = true;
+            setTimeout(() => {
+              justDraggedRef.current = false;
+            }, 50);
+          }
+        }
+      }
+
+      dragCreateRef.current = null;
+      setDragCreateState(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [!!dragCreateState, lists]);
+
+  // Month View cell click handler
+  const handleMonthCellClick = (e, day) => {
+    if (e.target.closest('.month-event-item')) return;
+
+    const container = document.querySelector('.calendar-view');
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
+
+      const popWidth = 280;
+      const popHeight = 180;
+      if (x + popWidth > rect.width) {
+        x = x - popWidth;
+      }
+      if (y + popHeight > rect.height) {
+        y = y - popHeight;
+      }
+
+      setQuickCreate({
+        day,
+        hour: 9, // Default to 9 AM
+        x,
+        y
+      });
+      setQuickTitle('');
+      setQuickListId(lists[0]?.id || '');
+      setQuickPriority('0');
+      setQuickRecurrence('none');
+    }
+    setContextMenu(null);
+    setHoveredEvent(null);
+  };
+
+  // Month View event click handler
+  const handleMonthEventClick = (e, eventItem) => {
+    e.stopPropagation();
+    if (onSelectEvent) {
+      onSelectEvent(eventItem.itemId, eventItem.isSubtask);
+    } else if (onSelectTask) {
+      onSelectTask(eventItem.itemId);
+    }
+  };
+
   const handleQuickCreateSave = async () => {
     if (!quickTitle.trim()) return;
 
-    const startHour = quickCreate.hour;
-    const endHour = startHour + 1;
+    const startHour = quickCreate.startHour !== undefined ? quickCreate.startHour : quickCreate.hour;
+    const startMin = quickCreate.startMin !== undefined ? quickCreate.startMin : 0;
+    const endHour = quickCreate.endHour !== undefined ? quickCreate.endHour : (startHour + 1);
+    const endMin = quickCreate.endMin !== undefined ? quickCreate.endMin : 0;
 
     const start = new Date(quickCreate.day);
-    start.setHours(startHour, 0, 0, 0);
+    start.setHours(startHour, startMin, 0, 0);
 
     const end = new Date(quickCreate.day);
-    end.setHours(endHour, 0, 0, 0);
+    end.setHours(endHour, endMin, 0, 0);
 
     const pad = (num) => String(num).padStart(2, '0');
     const startTimeStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T${pad(start.getHours())}:${pad(start.getMinutes())}`;
@@ -309,6 +497,55 @@ export function CalendarView() {
     
     setQuickCreate(null);
     setQuickTitle('');
+  };
+
+  // Month View drag and drop handlers
+  const handleMonthDragStart = (e, eventItem) => {
+    if (eventItem.isExternal) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData('text/plain', eventItem.itemId.toString());
+    e.dataTransfer.setData('isSubtask', eventItem.isSubtask ? 'true' : 'false');
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleMonthDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleMonthDrop = async (e, targetDay) => {
+    e.preventDefault();
+    const itemIdStr = e.dataTransfer.getData('text/plain');
+    const isSubtaskStr = e.dataTransfer.getData('isSubtask');
+    if (!itemIdStr) return;
+
+    const itemId = parseInt(itemIdStr, 10);
+    const isSubtask = isSubtaskStr === 'true';
+
+    // Find the original event to get the original start/end difference (duration)
+    const eventItem = scheduledEvents.find(ev => ev.itemId === itemId && ev.isSubtask === isSubtask);
+    if (!eventItem) return;
+
+    const originalStart = eventItem.start;
+    const originalEnd = eventItem.end;
+    const durationMs = originalEnd.getTime() - originalStart.getTime();
+
+    // Set new start time keeping the hours and minutes of originalStart
+    const newStart = new Date(targetDay);
+    newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), originalStart.getSeconds(), originalStart.getMilliseconds());
+
+    // Set new end time adding the duration
+    const newEnd = new Date(newStart.getTime() + durationMs);
+
+    const pad = (num) => String(num).padStart(2, '0');
+    const startTimeStr = `${newStart.getFullYear()}-${pad(newStart.getMonth() + 1)}-${pad(newStart.getDate())}T${pad(newStart.getHours())}:${pad(newStart.getMinutes())}`;
+    const endTimeStr = `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`;
+
+    if (onUpdateEvent) {
+      await onUpdateEvent(itemId, isSubtask, startTimeStr, endTimeStr);
+    }
   };
 
   // Mouse drag & resize handlers
@@ -462,18 +699,577 @@ export function CalendarView() {
     };
   }, [interactionState, days, onUpdateEvent, onSelectEvent, onSelectTask]);
 
+  const calculateAIReschedule = () => {
+    setRescheduleLoading(true);
+    
+    // 1. Get all uncompleted tasks
+    const pendingTasks = (tasks || []).filter(t => !t.is_completed);
+
+    // 2. Parse deadlines and effort
+    const tasksWithUrgency = pendingTasks.map(t => {
+      const priorityWeight = (t.priority || 0) + 1; // 1 to 4
+      const effort = t.estimated_effort || 1.0; // default 1h effort if not set
+      
+      let daysToDeadline = 30; // default 30 days
+      if (t.deadline_date) {
+        try {
+          const deadlineDateObj = parseISO(t.deadline_date);
+          const diffMs = deadlineDateObj.getTime() - startOfToday().getTime();
+          daysToDeadline = Math.max(0.1, diffMs / (1000 * 60 * 60 * 24));
+        } catch (e) {}
+      }
+
+      const effortInDays = effort / 8;
+      const timeLeftFactor = Math.max(0.05, daysToDeadline - effortInDays);
+      const urgencyScore = (priorityWeight * 10) / timeLeftFactor;
+
+      return {
+        ...t,
+        urgencyScore,
+        effortHours: effort,
+      };
+    });
+
+    // Sort by urgency score descending
+    tasksWithUrgency.sort((a, b) => b.urgencyScore - a.urgencyScore);
+
+    // 3. Schedule slots sequentially starting from today at 9:00 AM
+    let currentSlotStart = new Date();
+    if (currentSlotStart.getHours() < 9) {
+      currentSlotStart.setHours(9, 0, 0, 0);
+    } else if (currentSlotStart.getHours() >= 18) {
+      currentSlotStart = addDays(currentSlotStart, 1);
+      currentSlotStart.setHours(9, 0, 0, 0);
+    } else {
+      const mins = currentSlotStart.getMinutes();
+      if (mins < 30) {
+        currentSlotStart.setMinutes(30, 0, 0);
+      } else {
+        currentSlotStart.setHours(currentSlotStart.getHours() + 1, 0, 0, 0);
+        if (currentSlotStart.getHours() >= 18) {
+          currentSlotStart = addDays(currentSlotStart, 1);
+          currentSlotStart.setHours(9, 0, 0, 0);
+        }
+      }
+    }
+
+    const isOverlappingWithExternalEvents = (start, end) => {
+      return (externalEvents || []).some(event => {
+        try {
+          const eventStart = parseISO(event.start_time);
+          const eventEnd = parseISO(event.end_time);
+          return (start < eventEnd && end > eventStart);
+        } catch (e) {
+          return false;
+        }
+      });
+    };
+
+    const getNextWorkingSlot = (startTimeDate, durationHours) => {
+      let start = new Date(startTimeDate);
+      let durationMinutes = Math.round(durationHours * 60);
+
+      while (durationMinutes > 0) {
+        if (!includeWeekends && (start.getDay() === 0 || start.getDay() === 6)) {
+          start = addDays(start, start.getDay() === 6 ? 2 : 1);
+          start.setHours(9, 0, 0, 0);
+          continue;
+        }
+
+        if (start.getHours() >= 18 || (start.getHours() === 17 && start.getMinutes() > 0 && (18 * 60 - (start.getHours() * 60 + start.getMinutes())) < 0)) {
+          start = addDays(start, 1);
+          start.setHours(9, 0, 0, 0);
+          continue;
+        }
+        if (start.getHours() < 9) {
+          start.setHours(9, 0, 0, 0);
+        }
+
+        const dayEnd = new Date(start);
+        dayEnd.setHours(18, 0, 0, 0);
+        const minutesLeftToday = Math.round((dayEnd.getTime() - start.getTime()) / (1000 * 60));
+
+        const chunkMinutes = Math.min(durationMinutes, minutesLeftToday);
+        const end = new Date(start.getTime() + chunkMinutes * 60 * 1000);
+
+        if (isOverlappingWithExternalEvents(start, end)) {
+          let maxEventEnd = new Date(start.getTime() + 15 * 60 * 1000);
+          (externalEvents || []).forEach(event => {
+            try {
+              const eventStart = parseISO(event.start_time);
+              const eventEnd = parseISO(event.end_time);
+              if (start < eventEnd && end > eventStart) {
+                if (eventEnd > maxEventEnd) {
+                  maxEventEnd = eventEnd;
+                }
+              }
+            } catch (e) {}
+          });
+          start = new Date(maxEventEnd);
+          const mins = start.getMinutes();
+          const remainder = mins % 15;
+          if (remainder > 0) {
+            start.setMinutes(mins + (15 - remainder), 0, 0);
+          }
+          continue;
+        }
+
+        durationMinutes -= chunkMinutes;
+        if (durationMinutes > 0) {
+          start = end;
+        } else {
+          return { start: new Date(end.getTime() - Math.round(durationHours * 60) * 60 * 1000), end: end };
+        }
+      }
+      return { start: startTimeDate, end: new Date(startTimeDate.getTime() + durationHours * 3600 * 1000) };
+    };
+
+    const proposal = [];
+    let currentPointer = new Date(currentSlotStart);
+
+    tasksWithUrgency.forEach(task => {
+      const effort = task.effortHours;
+      const scheduledRange = getNextWorkingSlot(currentPointer, effort);
+      
+      const proposedStart = format(scheduledRange.start, 'yyyy-MM-dd HH:mm:ss');
+      const proposedEnd = format(scheduledRange.end, 'yyyy-MM-dd HH:mm:ss');
+      const proposedDueDate = format(scheduledRange.start, 'yyyy-MM-dd');
+
+      currentPointer = new Date(scheduledRange.end);
+
+      let status = 'En fecha';
+      if (task.deadline_date) {
+        try {
+          const deadlineDateObj = parseISO(task.deadline_date);
+          const deadlineEndDay = new Date(deadlineDateObj);
+          deadlineEndDay.setHours(23, 59, 59, 999);
+          if (scheduledRange.end > deadlineEndDay) {
+            status = 'Conflicto';
+          } else {
+            const diffHours = (deadlineEndDay.getTime() - scheduledRange.end.getTime()) / (1000 * 60 * 60);
+            if (diffHours <= 24) {
+              status = 'Urgente';
+            }
+          }
+        } catch (e) {}
+      }
+
+      proposal.push({
+        taskId: task.id,
+        title: task.title,
+        priority: task.priority,
+        deadlineDate: task.deadline_date,
+        effortHours: effort,
+        oldDueDate: task.due_date,
+        oldStartTime: task.start_time,
+        oldEndTime: task.end_time,
+        newDueDate: proposedDueDate,
+        newStartTime: proposedStart,
+        newEndTime: proposedEnd,
+        status,
+      });
+    });
+
+    setRescheduleProposal(proposal);
+    setRescheduleLoading(false);
+  };
+
+  const handleOpenAIRescheduleModal = () => {
+    setShowAIRescheduleModal(true);
+    setTimeout(() => {
+      calculateAIReschedule();
+    }, 0);
+  };
+
+  const handleApplyAIReschedule = async () => {
+    setRescheduleLoading(true);
+    try {
+      const updates = rescheduleProposal
+        .filter(item => item.newDueDate !== item.oldDueDate || item.newStartTime !== item.oldStartTime || item.newEndTime !== item.oldEndTime)
+        .map(item => onUpdateTask(item.taskId, {
+          due_date: item.newDueDate,
+          start_time: item.newStartTime,
+          end_time: item.newEndTime
+        }));
+      await Promise.all(updates);
+      setShowAIRescheduleModal(false);
+    } catch (err) {
+      console.error("Error applying AI reschedule:", err);
+    } finally {
+      setRescheduleLoading(false);
+    }
+  };
+
+  const renderAIRescheduleModal = () => {
+    return (
+      <div className="ai-modal-overlay" style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        animation: 'fadeIn 0.2s ease'
+      }}>
+        <div className="ai-modal-container" style={{
+          background: 'var(--right-pane-bg, #18181c)',
+          border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
+          borderRadius: '16px',
+          width: '100%',
+          maxWidth: '640px',
+          maxHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 24px 48px rgba(0, 0, 0, 0.8)',
+          overflow: 'hidden',
+          animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes slideUp {
+              from { transform: translateY(20px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+            .ai-loading-spinner {
+              width: 24px;
+              height: 24px;
+              border: 3px solid rgba(255,255,255,0.1);
+              border-radius: 50%;
+              border-top-color: var(--accent-hover);
+              animation: ai-spin 1s ease-in-out infinite;
+            }
+            @keyframes ai-spin {
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+          
+          <div style={{
+            padding: '20px 24px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles size={20} color="var(--accent-hover)" />
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Optimizar Agenda con IA
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowAIRescheduleModal(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div style={{
+            padding: '20px 24px',
+            overflowY: 'auto',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <p style={{
+              margin: 0,
+              fontSize: '0.82rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.5
+            }}>
+              El motor de priorización calculará el factor de urgencia de cada tarea pendiente usando su **Prioridad Eisenhower** y **Fecha Límite Fatal**. Las tareas se agendarán secuencialmente dentro de las horas laborables (9 AM - 6 PM) evitando solaparse con tus eventos fijos de calendario.
+            </p>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.04)',
+              borderRadius: '10px',
+              padding: '10px 14px'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Planificar en Fines de Semana</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Incluir Sábados y Domingos en el rango disponible</span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={includeWeekends}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIncludeWeekends(checked);
+                    // Force re-calculation on change
+                    setTimeout(() => {
+                      setRescheduleLoading(true);
+                    }, 0);
+                  }}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {rescheduleLoading ? (
+              <div style={{
+                padding: '40px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                color: 'var(--text-secondary)'
+              }}>
+                <div className="ai-loading-spinner" />
+                <span style={{ fontSize: '0.85rem' }}>Calculando plan de agenda óptima...</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Propuesta de Agenda ({rescheduleProposal.length} tareas)
+                </span>
+
+                {rescheduleProposal.length === 0 ? (
+                  <div style={{
+                    padding: '24px',
+                    textAlign: 'center',
+                    background: 'rgba(255,255,255,0.02)',
+                    borderRadius: '8px',
+                    border: '1px dashed rgba(255,255,255,0.06)',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-muted)'
+                  }}>
+                    No hay tareas pendientes para agendar.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {rescheduleProposal.map(item => {
+                      const startD = parseISO(item.newStartTime);
+                      const endD = parseISO(item.newEndTime);
+                      
+                      let statusBg = 'rgba(16, 185, 129, 0.1)';
+                      let statusBorder = 'rgba(16, 185, 129, 0.2)';
+                      let statusColor = '#10b981';
+                      if (item.status === 'Urgente') {
+                        statusBg = 'rgba(245, 158, 11, 0.1)';
+                        statusBorder = 'rgba(245, 158, 11, 0.2)';
+                        statusColor = '#f59e0b';
+                      } else if (item.status === 'Conflicto') {
+                        statusBg = 'rgba(239, 68, 68, 0.1)';
+                        statusBorder = 'rgba(239, 68, 68, 0.2)';
+                        statusColor = '#ef4444';
+                      }
+
+                      const hasChanged = item.newDueDate !== item.oldDueDate || item.newStartTime !== item.oldStartTime || item.newEndTime !== item.oldEndTime;
+
+                      return (
+                        <div key={item.taskId} style={{
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: hasChanged ? '1px solid rgba(124, 58, 237, 0.2)' : '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '8px',
+                          padding: '10px 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px'
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                              <span style={{
+                                fontSize: '0.82rem',
+                                fontWeight: 600,
+                                color: 'var(--text-primary)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }} title={item.title}>
+                                {item.title}
+                              </span>
+                              {item.effortHours > 0 && (
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: '4px' }}>
+                                  ⏱️ {item.effortHours}h
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                              <span>🗓️ {format(startD, "eee d MMM, HH:mm", { locale: es })}</span>
+                              <span>-</span>
+                              <span>{format(endD, "HH:mm")}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                            <span style={{
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              padding: '2px 6px',
+                              borderRadius: '20px',
+                              background: statusBg,
+                              border: `1px solid ${statusBorder}`,
+                              color: statusColor
+                            }}>
+                              {item.status}
+                            </span>
+                            {item.deadlineDate && (
+                              <span style={{ fontSize: '0.65rem', color: 'rgba(239, 68, 68, 0.8)' }}>
+                                Límite: {format(parseISO(item.deadlineDate), 'd MMM')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={{
+            padding: '16px 24px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            background: 'rgba(0, 0, 0, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                Conflictos: <strong style={{ color: rescheduleProposal.some(p => p.status === 'Conflicto') ? '#ef4444' : 'var(--text-primary)' }}>
+                  {rescheduleProposal.filter(p => p.status === 'Conflicto').length}
+                </strong>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setShowAIRescheduleModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleApplyAIReschedule}
+                disabled={rescheduleProposal.length === 0 || rescheduleLoading}
+                style={{
+                  background: 'var(--accent-hover)',
+                  border: 'none',
+                  color: '#ffffff',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Check size={14} />
+                Aplicar Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    if (showAIRescheduleModal) {
+      calculateAIReschedule();
+    }
+  }, [includeWeekends]);
+
   return (
     <div className="calendar-view" style={{ position: 'relative' }}>
       <div className="calendar-header">
         <h2>{(() => { const f = format(currentDate, 'MMMM yyyy', { locale: es }); return f.charAt(0).toUpperCase() + f.slice(1); })()}</h2>
         <div className="calendar-controls">
-          <button onClick={() => setCurrentDate(addDays(currentDate, viewMode === 'week' ? -7 : -1))}>&lt;</button>
+          <button onClick={() => {
+            if (viewMode === 'month') {
+              setCurrentDate(addMonths(currentDate, -1));
+            } else {
+              setCurrentDate(addDays(currentDate, viewMode === 'week' ? -7 : -1));
+            }
+          }}>&lt;</button>
           <button onClick={() => setCurrentDate(startOfToday())}>Hoy</button>
-          <button onClick={() => setCurrentDate(addDays(currentDate, viewMode === 'week' ? 7 : 1))}>&gt;</button>
+          <button onClick={() => {
+            if (viewMode === 'month') {
+              setCurrentDate(addMonths(currentDate, 1));
+            } else {
+              setCurrentDate(addDays(currentDate, viewMode === 'week' ? 7 : 1));
+            }
+          }}>&gt;</button>
+
+          <button
+            onClick={handleOpenAIRescheduleModal}
+            style={{
+              background: 'rgba(124, 58, 237, 0.1)',
+              border: '1px solid rgba(124, 58, 237, 0.3)',
+              color: 'var(--accent-hover)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontWeight: 600,
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+              fontFamily: 'inherit'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(124, 58, 237, 0.2)';
+              e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.5)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(124, 58, 237, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.3)';
+            }}
+          >
+            <Sparkles size={13} />
+            Optimizar Agenda
+          </button>
           
           <select value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
             <option value="day" style={{ background: '#1c1c1c' }}>Día</option>
             <option value="week" style={{ background: '#1c1c1c' }}>Semana</option>
+            <option value="month" style={{ background: '#1c1c1c' }}>Mes</option>
           </select>
         </div>
       </div>
@@ -519,269 +1315,391 @@ export function CalendarView() {
       )}
 
       <div className="calendar-grid-container">
-        {/* Days Header */}
-        <div className="calendar-days-header" style={{ paddingLeft: '60px' }}>
-          {days.map(day => (
-            <div key={day.toString()} className="calendar-day-label">
-              <div className="day-name">{(() => { const name = format(day, 'EEE', { locale: es }); return name.charAt(0).toUpperCase() + name.slice(1); })()}</div>
-              <div className={`day-number ${isSameDay(day, startOfToday()) ? 'today' : ''}`}>
-                {format(day, 'd')}
+        {viewMode === 'month' ? (
+          <>
+            {/* Month Grid Header */}
+            <div className="calendar-month-days-header">
+              {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(dName => (
+                <div key={dName} className="month-day-header-label">{dName}</div>
+              ))}
+            </div>
+
+            {/* Scrollable Month Grid */}
+            <div className="calendar-month-grid-scroll">
+              <div className="calendar-month-grid">
+                {days.map((day, idx) => {
+                  const isToday = isSameDay(day, startOfToday());
+                  const isCurrentMonth = isSameMonth(day, currentDate);
+                  
+                  // Get all events scheduled for this day
+                  const dayEvents = scheduledEvents.filter(e => isSameDay(e.start, day));
+
+                  return (
+                    <div 
+                      key={day.toString()} 
+                      className={`month-grid-cell ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${dragOverDay && isSameDay(dragOverDay, day) ? 'drag-over' : ''}`}
+                      onClick={(e) => handleMonthCellClick(e, day)}
+                      onDragOver={handleMonthDragOver}
+                      onDragEnter={() => setDragOverDay(day)}
+                      onDragLeave={() => {
+                        setDragOverDay(prev => prev && isSameDay(prev, day) ? null : prev);
+                      }}
+                      onDrop={(e) => {
+                        setDragOverDay(null);
+                        handleMonthDrop(e, day);
+                      }}
+                    >
+                      <div className="month-day-number-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <button 
+                          className="month-cell-add-btn" 
+                          onClick={(e) => { e.stopPropagation(); handleMonthCellClick(e, day); }}
+                          title="Agregar tarea"
+                        >
+                          <Plus size={13} />
+                        </button>
+                        <span className={`month-day-number ${isToday ? 'today-badge' : ''}`}>{format(day, 'd')}</span>
+                      </div>
+                      <div className="month-events-list">
+                        {dayEvents.map(event => {
+                          const isCompleted = event.isCompleted;
+                          const color = event.isExternal ? '#0078d4' : getListColor(event.list_id);
+                          const isDragging = draggingEventId === event.id;
+                          return (
+                            <div 
+                              key={event.id} 
+                              className={`month-event-item ${isCompleted ? 'completed' : ''} ${isDragging ? 'dragging' : ''}`}
+                              draggable={!event.isExternal}
+                              onDragStart={(e) => {
+                                handleMonthDragStart(e, event);
+                                setDraggingEventId(event.id);
+                              }}
+                              onDragEnd={() => setDraggingEventId(null)}
+                              onClick={(e) => handleMonthEventClick(e, event)}
+                              onContextMenu={(e) => handleContextMenu(e, event)}
+                              onMouseEnter={(e) => handleMouseEnter(e, event)}
+                              onMouseLeave={handleMouseLeave}
+                              style={{ borderLeft: `3px solid ${color}` }}
+                            >
+                              <span className="month-event-title">{event.title}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Scrollable Grid */}
-        <div className="calendar-grid-scroll">
-          <div className="calendar-grid" style={{ height: `${24 * PIXELS_PER_HOUR}px` }}>
-            {/* Time Axis */}
-            <div className="time-axis">
-              {hours.map(hour => (
-                <div key={hour} className="time-label" style={{ height: `${PIXELS_PER_HOUR}px` }}>
-                  <span>
-                    {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
-                  </span>
+          </>
+        ) : (
+          <>
+            {/* Days Header */}
+            <div className="calendar-days-header" style={{ paddingLeft: '60px' }}>
+              {days.map(day => (
+                <div key={day.toString()} className="calendar-day-label">
+                  <div className="day-name">{(() => { const name = format(day, 'EEE', { locale: es }); return name.charAt(0).toUpperCase() + name.slice(1); })()}</div>
+                  <div className={`day-number ${isSameDay(day, startOfToday()) ? 'today' : ''}`}>
+                    {format(day, 'd')}
+                  </div>
                 </div>
               ))}
             </div>
 
-            {/* Day Columns */}
-            <div className="day-columns">
-              {days.map((day, dIdx) => {
-                const dayEvents = scheduledEvents.filter(e => {
-                  const isInteracting = interactionState && interactionState.event.id === e.id;
-                  if (isInteracting) {
-                    return interactionState.currentDayIndex === dIdx;
-                  }
-                  return isSameDay(e.start, day);
-                });
+            {/* Scrollable Grid */}
+            <div className="calendar-grid-scroll">
+              <div className="calendar-grid" style={{ height: `${24 * PIXELS_PER_HOUR}px` }}>
+                {/* Time Axis */}
+                <div className="time-axis">
+                  {hours.map(hour => (
+                    <div key={hour} className="time-label" style={{ height: `${PIXELS_PER_HOUR}px` }}>
+                      <span>
+                        {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
 
-                // Compute overlapping layout groups and conflicts
-                const eventLayoutProps = new Map();
-                
-                // 1. Group events into connected components of overlapping intervals
-                const components = [];
-                const sortedEvents = [...dayEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
-
-                sortedEvents.forEach(event => {
-                  const overlappingCompIndices = [];
-                  components.forEach((comp, idx) => {
-                    const overlaps = comp.some(e => event.start < e.end && event.end > e.start);
-                    if (overlaps) {
-                      overlappingCompIndices.push(idx);
-                    }
-                  });
-
-                  if (overlappingCompIndices.length === 0) {
-                    components.push([event]);
-                  } else {
-                    const mergedComp = [event];
-                    overlappingCompIndices.sort((a, b) => b - a).forEach(idx => {
-                      mergedComp.push(...components[idx]);
-                      components.splice(idx, 1);
-                    });
-                    components.push(mergedComp);
-                  }
-                });
-
-                // 2. Distribute into columns inside each component
-                components.forEach(comp => {
-                  const compCols = [];
-                  const compEvents = [...comp].sort((a, b) => a.start.getTime() - b.start.getTime());
-
-                  compEvents.forEach(event => {
-                    let colIdx = 0;
-                    while (colIdx < compCols.length) {
-                      const hasOverlap = compCols[colIdx].some(e => event.start < e.end && event.end > e.start);
-                      if (!hasOverlap) {
-                        break;
+                {/* Day Columns */}
+                <div className="day-columns">
+                  {days.map((day, dIdx) => {
+                    const dayEvents = scheduledEvents.filter(e => {
+                      const isInteracting = interactionState && interactionState.event.id === e.id;
+                      if (isInteracting) {
+                        return interactionState.currentDayIndex === dIdx;
                       }
-                      colIdx++;
-                    }
-                    if (colIdx === compCols.length) {
-                      compCols.push([]);
-                    }
-                    compCols[colIdx].push(event);
-                  });
+                      return isSameDay(e.start, day);
+                    });
 
-                  const totalCols = compCols.length;
-                  const activeEvents = comp.filter(e => !e.isCompleted);
+                    // Compute overlapping layout groups and conflicts
+                    const eventLayoutProps = new Map();
+                    
+                    // 1. Group events into connected components of overlapping intervals
+                    const components = [];
+                    const sortedEvents = [...dayEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
 
-                  compCols.forEach((colEvents, colIdx) => {
-                    colEvents.forEach(event => {
-                      // An active event is in conflict if it overlaps with another active event in the component
-                      const hasConflict = !event.isCompleted && activeEvents.some(
-                        e => e.id !== event.id && event.start < e.end && event.end > e.start
-                      );
+                    sortedEvents.forEach(event => {
+                      const overlappingCompIndices = [];
+                      components.forEach((comp, idx) => {
+                        const overlaps = comp.some(e => event.start < e.end && event.end > e.start);
+                        if (overlaps) {
+                          overlappingCompIndices.push(idx);
+                        }
+                      });
 
-                      eventLayoutProps.set(event.id, {
-                        widthPercent: 100 / totalCols,
-                        leftPercent: colIdx * (100 / totalCols),
-                        hasConflict
+                      if (overlappingCompIndices.length === 0) {
+                        components.push([event]);
+                      } else {
+                        const mergedComp = [event];
+                        overlappingCompIndices.sort((a, b) => b - a).forEach(idx => {
+                          mergedComp.push(...components[idx]);
+                          components.splice(idx, 1);
+                        });
+                        components.push(mergedComp);
+                      }
+                    });
+
+                    // 2. Distribute into columns inside each component
+                    components.forEach(comp => {
+                      const compCols = [];
+                      const compEvents = [...comp].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+                      compEvents.forEach(event => {
+                        let colIdx = 0;
+                        while (colIdx < compCols.length) {
+                          const hasOverlap = compCols[colIdx].some(e => event.start < e.end && event.end > e.start);
+                          if (!hasOverlap) {
+                            break;
+                          }
+                          colIdx++;
+                        }
+                        if (colIdx === compCols.length) {
+                          compCols.push([]);
+                        }
+                        compCols[colIdx].push(event);
+                      });
+
+                      const totalCols = compCols.length;
+                      const activeEvents = comp.filter(e => !e.isCompleted);
+
+                      compCols.forEach((colEvents, colIdx) => {
+                        colEvents.forEach(event => {
+                          // An active event is in conflict if it overlaps with another active event in the component
+                          const hasConflict = !event.isCompleted && activeEvents.some(
+                            e => e.id !== event.id && event.start < e.end && event.end > e.start
+                          );
+
+                          eventLayoutProps.set(event.id, {
+                            widthPercent: 100 / totalCols,
+                            leftPercent: colIdx * (100 / totalCols),
+                            hasConflict
+                          });
+                        });
                       });
                     });
-                  });
-                });
-                
-                const isToday = isSameDay(day, now);
-                const nowHours = getHours(now);
-                const nowMins = getMinutes(now);
-                const lineTop = (nowHours + nowMins / 60) * PIXELS_PER_HOUR;
-                
-                return (
-                  <div key={day.toString()} className="day-column">
-                    {/* Grid lines */}
-                    {hours.map(hour => (
-                      <div 
-                        key={hour} 
-                        className="grid-cell" 
-                        style={{ height: `${PIXELS_PER_HOUR}px` }} 
-                        onClick={(e) => handleCellClick(e, day, hour)}
-                      />
-                    ))}
+                    
+                    const isToday = isSameDay(day, now);
+                    const nowHours = getHours(now);
+                    const nowMins = getMinutes(now);
+                    const lineTop = (nowHours + nowMins / 60) * PIXELS_PER_HOUR;
+                    
+                    const isDraggingThisDay = dragCreateState && isSameDay(dragCreateState.day, day);
 
-                    {/* Current Time marker line */}
-                    {isToday && (
+                    return (
                       <div 
-                        className="current-time-line"
-                        style={{
-                          position: 'absolute',
-                          top: `${lineTop}px`,
-                          left: 0,
-                          right: 0,
-                          height: '2px',
-                          background: '#ef4444',
-                          zIndex: 10,
-                          pointerEvents: 'none'
-                        }}
+                        key={day.toString()} 
+                        className="day-column"
+                        onMouseDown={(e) => handleColumnMouseDown(e, day)}
                       >
-                        <div className="time-line-pulsator" />
-                      </div>
-                    )}
+                        {/* Grid lines */}
+                        {hours.map(hour => (
+                          <div 
+                            key={hour} 
+                            className="grid-cell" 
+                            style={{ height: `${PIXELS_PER_HOUR}px` }} 
+                            onClick={(e) => handleCellClick(e, day, hour)}
+                          />
+                        ))}
 
-                    {/* Event Blocks */}
-                    {dayEvents.map(event => {
-                      const isInteracting = interactionState && interactionState.event.id === event.id;
-                      
-                      const start = event.start;
-                      const end = event.end;
-                      
-                      let top = (getHours(start) + getMinutes(start) / 60) * PIXELS_PER_HOUR;
-                      let durationMinutes = differenceInMinutes(end, start);
-                      let height = Math.max((durationMinutes / 60) * PIXELS_PER_HOUR, 24);
-
-                      if (isInteracting) {
-                        top = interactionState.currentTop;
-                        height = interactionState.currentHeight;
-                      }
-
-                      const startTimeStr = format(start, 'h:mm a');
-                      const endTimeStr = format(end, 'h:mm a');
-
-                      const layoutProps = eventLayoutProps.get(event.id) || { widthPercent: 100, leftPercent: 0, hasConflict: false };
-
-                      // Styling based on conflict status
-                      const borderStyle = layoutProps.hasConflict 
-                        ? '1px solid rgba(239, 68, 68, 0.4)' 
-                        : (event.isExternal ? '1px solid rgba(0, 120, 212, 0.3)' : 'none');
-                      
-                      const borderLeftStyle = layoutProps.hasConflict 
-                        ? '4px solid #ef4444' 
-                        : (event.isExternal ? '4px solid #0078d4' : 'none');
-                      
-                      const shadowStyle = layoutProps.hasConflict
-                        ? '0 4px 12px rgba(239, 68, 68, 0.25), 0 0 8px rgba(239, 68, 68, 0.2)'
-                        : (event.isExternal ? '0 4px 12px rgba(0, 120, 212, 0.15)' : 'none');
-
-                      const baseBgColor = event.isExternal ? 'rgba(0, 120, 212, 0.12)' : getListColor(event.list_id);
-                      // Light red-tinged background for conflicting items
-                      const bgColor = layoutProps.hasConflict 
-                        ? (event.isExternal ? 'rgba(239, 68, 68, 0.12)' : `linear-gradient(135deg, ${getListColor(event.list_id)} 0%, rgba(220, 38, 38, 0.75) 100%)`)
-                        : baseBgColor;
-
-                      return (
-                        <div 
-                          key={event.id} 
-                          className={`task-block ${event.isSubtask ? 'subtask-event-block' : ''} ${event.isExternal ? 'external-event-block' : ''} ${isInteracting ? 'dragging' : ''} ${layoutProps.hasConflict ? 'conflict-event' : ''}`}
-                          style={{
-                            top: `${top}px`,
-                            height: `${height}px`,
-                            background: bgColor,
-                            color: event.isExternal ? 'var(--text-primary)' : '#ffffff',
-                            position: 'absolute',
-                            left: `calc(${layoutProps.leftPercent}% + 4px)`,
-                            right: `calc(${100 - layoutProps.leftPercent - layoutProps.widthPercent}% + 4px)`,
-                            cursor: event.isExternal ? 'pointer' : 'move',
-                            userSelect: 'none',
-                            zIndex: isInteracting ? 100 : (layoutProps.hasConflict ? 5 : 1),
-                            transition: isInteracting ? 'none' : 'top 0.15s, height 0.15s, left 0.15s, right 0.15s',
-                            boxShadow: shadowStyle,
-                            border: borderStyle,
-                            borderLeft: borderLeftStyle,
-                            backdropFilter: (event.isExternal || layoutProps.hasConflict) ? 'blur(4px)' : 'none',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            padding: '6px 8px',
-                            boxSizing: 'border-box'
-                          }}
-                          onMouseDown={(e) => !event.isExternal && handleMouseDown(e, event, 'drag')}
-                          onMouseEnter={(e) => handleMouseEnter(e, event)}
-                          onMouseLeave={handleMouseLeave}
-                          onContextMenu={(e) => handleContextMenu(e, event)}
-                        >
-                          <div className="task-block-title" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {event.isSubtask && <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginRight: '4px' }}>[Sub]</span>}
-                            {event.isExternal && <span style={{ fontSize: '0.65rem', background: '#0078d4', color: '#ffffff', padding: '1px 5px', borderRadius: '3px', fontWeight: 800 }}>Outlook</span>}
-                            {layoutProps.hasConflict && (
-                              <span 
-                                title="Conflicto de horario" 
-                                style={{ 
-                                  color: '#ef4444', 
-                                  fontWeight: 'bold',
-                                  fontSize: '0.8rem',
-                                  animation: 'pulse 1.5s infinite',
-                                  display: 'inline-flex'
-                                }}
-                              >
-                                ⚠️
-                              </span>
-                            )}
-                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: (event.isExternal || layoutProps.hasConflict) ? 600 : 'normal' }}>{event.title}</span>
+                        {/* Drag-to-Create Preview */}
+                        {isDraggingThisDay && (
+                          <div 
+                            className="drag-create-preview"
+                            style={{
+                              position: 'absolute',
+                              top: `${Math.min(dragCreateState.startY, dragCreateState.currentY)}px`,
+                              height: `${Math.max(15, Math.abs(dragCreateState.currentY - dragCreateState.startY))}px`,
+                              left: '4px',
+                              right: '4px',
+                              zIndex: 8,
+                              pointerEvents: 'none'
+                            }}
+                          >
+                            <div className="drag-create-time-badge">
+                              {(() => {
+                                const startY = Math.min(dragCreateState.startY, dragCreateState.currentY);
+                                const endY = Math.max(dragCreateState.startY, dragCreateState.currentY);
+                                const startTotalMin = startY;
+                                const endTotalMin = endY;
+                                const sh = Math.floor(startTotalMin / 60);
+                                const sm = Math.round(startTotalMin % 60);
+                                const eh = Math.floor(endTotalMin / 60);
+                                const em = Math.round(endTotalMin % 60);
+                                const pad = (n) => String(n).padStart(2, '0');
+                                const formatTime = (h, m) => {
+                                  const suffix = h >= 12 ? 'PM' : 'AM';
+                                  const displayH = h % 12 === 0 ? 12 : h % 12;
+                                  return `${displayH}:${pad(m)} ${suffix}`;
+                                };
+                                return `${formatTime(sh, sm)} - ${formatTime(eh, em)}`;
+                              })()}
+                            </div>
                           </div>
-                          <div className="task-block-time" style={{ fontSize: '0.65rem', opacity: 0.8, color: (event.isExternal || layoutProps.hasConflict) ? 'var(--text-secondary)' : '#ffffff' }}>
-                            {startTimeStr} - {endTimeStr}
-                          </div>
+                        )}
 
-                          {/* Resize handle */}
-                          {!event.isExternal && (
+                        {/* Current Time marker line */}
+                        {isToday && (
+                          <div 
+                            className="current-time-line"
+                            style={{
+                              position: 'absolute',
+                              top: `${lineTop}px`,
+                              left: 0,
+                              right: 0,
+                              height: '2px',
+                              background: '#ef4444',
+                              zIndex: 10,
+                              pointerEvents: 'none'
+                            }}
+                          >
+                            <div className="time-line-pulsator" />
+                          </div>
+                        )}
+
+                        {/* Event Blocks */}
+                        {dayEvents.map(event => {
+                          const isInteracting = interactionState && interactionState.event.id === event.id;
+                          
+                          const start = event.start;
+                          const end = event.end;
+                          
+                          let top = (getHours(start) + getMinutes(start) / 60) * PIXELS_PER_HOUR;
+                          let durationMinutes = differenceInMinutes(end, start);
+                          let height = Math.max((durationMinutes / 60) * PIXELS_PER_HOUR, 24);
+
+                          if (isInteracting) {
+                            top = interactionState.currentTop;
+                            height = interactionState.currentHeight;
+                          }
+
+                          const startTimeStr = format(start, 'h:mm a');
+                          const endTimeStr = format(end, 'h:mm a');
+
+                          const layoutProps = eventLayoutProps.get(event.id) || { widthPercent: 100, leftPercent: 0, hasConflict: false };
+
+                          // Styling based on conflict status
+                          const borderStyle = layoutProps.hasConflict 
+                            ? '1px solid rgba(239, 68, 68, 0.4)' 
+                            : (event.isExternal ? '1px solid rgba(0, 120, 212, 0.3)' : 'none');
+                          
+                          const borderLeftStyle = layoutProps.hasConflict 
+                            ? '4px solid #ef4444' 
+                            : (event.isExternal ? '4px solid #0078d4' : 'none');
+                          
+                          const shadowStyle = layoutProps.hasConflict
+                            ? '0 4px 12px rgba(239, 68, 68, 0.25), 0 0 8px rgba(239, 68, 68, 0.2)'
+                            : (event.isExternal ? '0 4px 12px rgba(0, 120, 212, 0.15)' : 'none');
+
+                          const baseBgColor = event.isExternal ? 'rgba(0, 120, 212, 0.12)' : getListColor(event.list_id);
+                          // Light red-tinged background for conflicting items
+                          const bgColor = layoutProps.hasConflict 
+                            ? (event.isExternal ? 'rgba(239, 68, 68, 0.12)' : `linear-gradient(135deg, ${getListColor(event.list_id)} 0%, rgba(220, 38, 38, 0.75) 100%)`)
+                            : baseBgColor;
+
+                          return (
                             <div 
-                              className="event-resize-handle"
-                              onMouseDown={(e) => handleMouseDown(e, event, 'resize')}
+                              key={event.id} 
+                              className={`task-block ${event.isSubtask ? 'subtask-event-block' : ''} ${event.isExternal ? 'external-event-block' : ''} ${isInteracting ? 'dragging' : ''} ${layoutProps.hasConflict ? 'conflict-event' : ''}`}
                               style={{
+                                top: `${top}px`,
+                                height: `${height}px`,
+                                background: bgColor,
+                                color: event.isExternal ? 'var(--text-primary)' : '#ffffff',
                                 position: 'absolute',
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                height: '8px',
-                                cursor: 'ns-resize',
-                                backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                                borderBottomLeftRadius: '4px',
-                                borderBottomRightRadius: '4px',
-                                transition: 'background-color 0.2s'
+                                left: `calc(${layoutProps.leftPercent}% + 4px)`,
+                                right: `calc(${100 - layoutProps.leftPercent - layoutProps.widthPercent}% + 4px)`,
+                                cursor: event.isExternal ? 'pointer' : 'move',
+                                userSelect: 'none',
+                                zIndex: isInteracting ? 100 : (layoutProps.hasConflict ? 5 : 1),
+                                transition: isInteracting ? 'none' : 'top 0.15s, height 0.15s, left 0.15s, right 0.15s',
+                                boxShadow: shadowStyle,
+                                border: borderStyle,
+                                borderLeft: borderLeftStyle,
+                                backdropFilter: (event.isExternal || layoutProps.hasConflict) ? 'blur(4px)' : 'none',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyStyle: 'space-between',
+                                padding: '6px 8px',
+                                boxSizing: 'border-box'
                               }}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                              onMouseDown={(e) => !event.isExternal && handleMouseDown(e, event, 'drag')}
+                              onMouseEnter={(e) => handleMouseEnter(e, event)}
+                              onMouseLeave={handleMouseLeave}
+                              onContextMenu={(e) => handleContextMenu(e, event)}
+                            >
+                              <div className="task-block-title" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                {event.isSubtask && <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginRight: '4px' }}>[Sub]</span>}
+                                {event.isExternal && <span style={{ fontSize: '0.65rem', background: '#0078d4', color: '#ffffff', padding: '1px 5px', borderRadius: '3px', fontWeight: 800 }}>Outlook</span>}
+                                {layoutProps.hasConflict && (
+                                  <span 
+                                    title="Conflicto de horario" 
+                                    style={{ 
+                                      color: '#ef4444', 
+                                      fontWeight: 'bold',
+                                      fontSize: '0.8rem',
+                                      animation: 'pulse 1.5s infinite',
+                                      display: 'inline-flex'
+                                    }}
+                                  >
+                                    ⚠️
+                                  </span>
+                                )}
+                                <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: (event.isExternal || layoutProps.hasConflict) ? 600 : 'normal' }}>{event.title}</span>
+                              </div>
+                              <div className="task-block-time" style={{ fontSize: '0.65rem', opacity: 0.8, color: (event.isExternal || layoutProps.hasConflict) ? 'var(--text-secondary)' : '#ffffff' }}>
+                                {startTimeStr} - {endTimeStr}
+                              </div>
+
+                              {/* Resize handle */}
+                              {!event.isExternal && (
+                                <div 
+                                  className="event-resize-handle"
+                                  onMouseDown={(e) => handleMouseDown(e, event, 'resize')}
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    height: '8px',
+                                    cursor: 'ns-resize',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                                    borderBottomLeftRadius: '4px',
+                                    borderBottomRightRadius: '4px',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Floating Hover Card */}
@@ -968,7 +1886,24 @@ export function CalendarView() {
             Nueva Actividad
           </div>
           <div className="quick-create-time-info" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            📅 {(() => { const name = format(quickCreate.day, 'EEE d, MMMM', { locale: es }); return name.charAt(0).toUpperCase() + name.slice(1); })()} a las {quickCreate.hour === 0 ? '12:00 AM' : quickCreate.hour < 12 ? `${quickCreate.hour}:00 AM` : quickCreate.hour === 12 ? '12:00 PM' : `${quickCreate.hour - 12}:00 PM`}
+            📅 {(() => { const name = format(quickCreate.day, 'EEE d, MMMM', { locale: es }); return name.charAt(0).toUpperCase() + name.slice(1); })()} 
+            {quickCreate.startMin !== undefined ? (
+              ` de ${(() => {
+                const pad = (n) => String(n).padStart(2, '0');
+                const sh = quickCreate.startHour;
+                const sm = quickCreate.startMin;
+                const eh = quickCreate.endHour;
+                const em = quickCreate.endMin;
+                const formatTime = (h, m) => {
+                  const suffix = h >= 12 ? 'PM' : 'AM';
+                  const displayH = h % 12 === 0 ? 12 : h % 12;
+                  return `${displayH}:${pad(m)} ${suffix}`;
+                };
+                return `${formatTime(sh, sm)} a ${formatTime(eh, em)}`;
+              })()}`
+            ) : (
+              ` a las ${quickCreate.hour === 0 ? '12:00 AM' : quickCreate.hour < 12 ? `${quickCreate.hour}:00 AM` : quickCreate.hour === 12 ? '12:00 PM' : `${quickCreate.hour - 12}:00 PM`}`
+            )}
           </div>
           <div className="quick-create-field" style={{ marginBottom: '8px' }}>
             <input 
@@ -1094,6 +2029,7 @@ export function CalendarView() {
           </div>
         </div>
       )}
+      {showAIRescheduleModal && renderAIRescheduleModal()}
     </div>
   );
 }

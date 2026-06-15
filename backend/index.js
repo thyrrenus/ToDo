@@ -476,11 +476,11 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags, recurrence_type } = req.body;
+  const { list_id, section_id, title, description, due_date, start_time, end_time, priority, team_id, assigned_to, tags, recurrence_type, deadline_date, estimated_effort } = req.body;
   try {
     const info = await db.prepare(`
-      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type, deadline_date, estimated_effort) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       list_id || null, 
       section_id || null, 
@@ -493,7 +493,9 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       req.user.id, 
       team_id || null, 
       assigned_to || null,
-      recurrence_type || 'none'
+      recurrence_type || 'none',
+      deadline_date || null,
+      estimated_effort !== undefined && estimated_effort !== null ? Number(estimated_effort) : 0
     );
     const taskId = info.lastInsertRowid;
     
@@ -517,7 +519,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
-  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags, recurrence_type } = req.body;
+  const { title, description, due_date, start_time, end_time, priority, is_completed, list_id, section_id, team_id, assigned_to, tags, recurrence_type, deadline_date, estimated_effort } = req.body;
   const { id } = req.params;
   try {
     const current = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
@@ -559,8 +561,8 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
         );
         if (nextDates) {
           const nextInfo = await db.prepare(`
-            INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (list_id, section_id, title, description, due_date, start_time, end_time, priority, user_id, team_id, assigned_to, recurrence_type, deadline_date, estimated_effort) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             list_id !== undefined ? list_id : current.list_id,
             section_id !== undefined ? section_id : current.section_id,
@@ -573,7 +575,9 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
             current.user_id,
             team_id !== undefined ? team_id : current.team_id,
             assigned_to !== undefined ? assigned_to : current.assigned_to,
-            recType
+            recType,
+            deadline_date !== undefined ? deadline_date : current.deadline_date,
+            estimated_effort !== undefined ? estimated_effort : current.estimated_effort
           );
 
           const nextTaskId = nextInfo.lastInsertRowid;
@@ -611,7 +615,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
 
     await db.prepare(`
       UPDATE tasks 
-      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, completed_at = ?, team_id = ?, assigned_to = ?, recurrence_type = ? 
+      SET list_id = ?, section_id = ?, title = ?, description = ?, due_date = ?, start_time = ?, end_time = ?, priority = ?, is_completed = ?, completed_at = ?, team_id = ?, assigned_to = ?, recurrence_type = ?, deadline_date = ?, estimated_effort = ? 
       WHERE id = ?
     `).run(
       list_id !== undefined ? list_id : current.list_id,
@@ -627,6 +631,8 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       team_id !== undefined ? team_id : current.team_id,
       assigned_to !== undefined ? assigned_to : current.assigned_to,
       recurrence_type !== undefined ? recurrence_type : current.recurrence_type,
+      deadline_date !== undefined ? deadline_date : current.deadline_date,
+      estimated_effort !== undefined ? (estimated_effort !== null ? Number(estimated_effort) : 0) : current.estimated_effort,
       id
     );
 

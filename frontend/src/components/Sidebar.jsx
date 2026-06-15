@@ -54,7 +54,8 @@ export function Sidebar() {
     fetchListGroups: onRefreshListGroups,
     handleUpdateTaskList: onUpdateTaskList,
     handleRescheduleTask: onRescheduleTask,
-    fetchTags: onRefreshTags
+    fetchTags: onRefreshTags,
+    handleUpdateTask
   } = useTodo();
 
   const setActiveList = (val) => {
@@ -102,6 +103,7 @@ export function Sidebar() {
   const [isDraggedOverGeneral, setIsDraggedOverGeneral] = useState(false);
   const [draggedOverListId, setDraggedOverListId] = useState(null);
   const [draggedOverSystemView, setDraggedOverSystemView] = useState(null);
+  const [draggedOverTagId, setDraggedOverTagId] = useState(null);
 
   const handleAddList = async (e) => {
     if (e) e.preventDefault();
@@ -338,8 +340,8 @@ export function Sidebar() {
             setDraggedOverListId(null);
             const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
             if (taskIdStr) {
-              const taskId = parseInt(taskIdStr, 10);
-              if (!isNaN(taskId) && onUpdateTaskList) {
+              const taskId = /^\d+$/.test(taskIdStr) ? parseInt(taskIdStr, 10) : taskIdStr;
+              if (onUpdateTaskList) {
                 await onUpdateTaskList(taskId, list.id);
               }
             }
@@ -432,13 +434,11 @@ export function Sidebar() {
               setDraggedOverSystemView(null);
               const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
               if (taskIdStr) {
-                const taskId = parseInt(taskIdStr, 10);
-                if (!isNaN(taskId)) {
-                  const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
-                  const inboxListId = inboxList ? inboxList.id : null;
-                  if (onUpdateTaskList) {
-                    await onUpdateTaskList(taskId, inboxListId);
-                  }
+                const taskId = /^\d+$/.test(taskIdStr) ? parseInt(taskIdStr, 10) : taskIdStr;
+                const inboxList = lists.find(l => l.name.toLowerCase() === 'inbox');
+                const inboxListId = inboxList ? inboxList.id : null;
+                if (onUpdateTaskList) {
+                  await onUpdateTaskList(taskId, inboxListId);
                 }
               }
             }
@@ -471,8 +471,8 @@ export function Sidebar() {
               setDraggedOverSystemView(null);
               const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
               if (taskIdStr) {
-                const taskId = parseInt(taskIdStr, 10);
-                if (!isNaN(taskId) && onRescheduleTask) {
+                const taskId = /^\d+$/.test(taskIdStr) ? parseInt(taskIdStr, 10) : taskIdStr;
+                if (onRescheduleTask) {
                   await onRescheduleTask(taskId, 0);
                 }
               }
@@ -506,8 +506,8 @@ export function Sidebar() {
               setDraggedOverSystemView(null);
               const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
               if (taskIdStr) {
-                const taskId = parseInt(taskIdStr, 10);
-                if (!isNaN(taskId) && onRescheduleTask) {
+                const taskId = /^\d+$/.test(taskIdStr) ? parseInt(taskIdStr, 10) : taskIdStr;
+                if (onRescheduleTask) {
                   await onRescheduleTask(taskId, 1);
                 }
               }
@@ -726,7 +726,52 @@ export function Sidebar() {
                     setActiveList(null);
                   }
                 }}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'background-color 0.2s' }}
+                onDragOver={(e) => {
+                  if (!isDraggingList) {
+                    e.preventDefault();
+                    setDraggedOverTagId(tag.id);
+                  }
+                }}
+                onDragLeave={() => {
+                  if (!isDraggingList) {
+                    setDraggedOverTagId(null);
+                  }
+                }}
+                onDrop={async (e) => {
+                  if (!isDraggingList) {
+                    e.preventDefault();
+                    setDraggedOverTagId(null);
+                    const taskIdStr = e.dataTransfer.getData('taskId') || e.dataTransfer.getData('taskid');
+                    if (taskIdStr) {
+                      const taskId = parseInt(taskIdStr, 10);
+                      if (!isNaN(taskId)) {
+                        const targetTask = tasks.find(t => t.id === taskId);
+                        if (targetTask) {
+                          const currentTagNames = targetTask.tags ? targetTask.tags.map(t => t.name) : [];
+                          if (!currentTagNames.includes(tag.name)) {
+                            const updatedTagNames = [...currentTagNames, tag.name];
+                            if (handleUpdateTask) {
+                              await handleUpdateTask(taskId, { tags: updatedTagNames });
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  width: '100%', 
+                  padding: '6px 12px', 
+                  borderRadius: '8px', 
+                  cursor: 'pointer', 
+                  transition: 'all 0.2s ease',
+                  background: draggedOverTagId === tag.id ? 'rgba(255, 255, 255, 0.08)' : undefined,
+                  border: draggedOverTagId === tag.id ? `1.5px dashed ${tag.color || 'var(--accent-hover)'}` : '1.5px solid transparent',
+                  boxShadow: draggedOverTagId === tag.id ? `0 0 10px ${tag.color || 'var(--accent-hover)'}30` : 'none',
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
                   <div 

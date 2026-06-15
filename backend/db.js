@@ -109,6 +109,8 @@ const initDb = async () => {
       priority INTEGER DEFAULT 0,
       is_completed BOOLEAN DEFAULT 0,
       recurrence_type TEXT DEFAULT 'none',
+      deadline_date DATETIME,
+      estimated_effort REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (list_id) REFERENCES lists(id),
       FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
@@ -208,6 +210,8 @@ const initDb = async () => {
       ALTER TABLE users ADD COLUMN outlook_ical_url TEXT;
       ALTER TABLE tasks ADD COLUMN completed_at DATETIME;
       ALTER TABLE subtasks ADD COLUMN completed_at DATETIME;
+      ALTER TABLE tasks ADD COLUMN deadline_date DATETIME;
+      ALTER TABLE tasks ADD COLUMN estimated_effort REAL DEFAULT 0;
     `);
 
   // Create Indexes for performance optimization on foreign keys

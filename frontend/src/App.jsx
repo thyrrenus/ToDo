@@ -130,6 +130,8 @@ function App() {
   } = useTodo();
 
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('showFilters') === 'true');
+  const [activeDragSectionId, setActiveDragSectionId] = useState(null);
+
 
   const toggleFilters = () => {
     setShowFilters(prev => {
@@ -331,7 +333,10 @@ function App() {
       return task.list_id === null || task.list_id === inboxListId;
     }
     if (activeList === 'today') {
-      return task.due_date && isToday(parseISO(task.due_date));
+      const taskDate = task.due_date ? new Date(task.due_date.split('T')[0]) : null;
+      const todayDate = new Date(new Date().toISOString().split('T')[0]);
+      const isTaskOverdue = taskDate && taskDate < todayDate;
+      return task.due_date && (isToday(parseISO(task.due_date)) || (isTaskOverdue && !task.is_completed));
     }
     if (activeList === 'upcoming') {
       return task.due_date && isFuture(parseISO(task.due_date));
@@ -1055,8 +1060,114 @@ function App() {
                         </button>
                       </div>
                     </>
+                  ) : activeList === 'today' ? (
+                    <>
+                      {/* Overdue tasks section */}
+                      {(() => {
+                        const overdueTasks = filteredTasks.filter(t => {
+                          const taskDate = t.due_date ? new Date(t.due_date.split('T')[0]) : null;
+                          const todayDate = new Date(new Date().toISOString().split('T')[0]);
+                          return taskDate && taskDate < todayDate && !t.is_completed;
+                        });
+                        
+                        if (overdueTasks.length > 0) {
+                          return (
+                            <div className="overdue-tasks-section" style={{ marginBottom: '1.5rem' }}>
+                              <h4 style={{ 
+                                color: 'var(--danger-color)', 
+                                fontSize: '0.78rem', 
+                                fontWeight: 700, 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '0.75px', 
+                                marginBottom: '10px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '6px',
+                                opacity: 0.95
+                              }}>
+                                ⚠️ Tareas Atrasadas
+                              </h4>
+                              {overdueTasks.map(task => (
+                                <TaskItem 
+                                  key={task.id} 
+                                  task={task} 
+                                  isSelected={selectedTaskId === task.id}
+                                  selectedSubtaskId={selectedSubtaskId}
+                                  isSyncing={syncingTaskIds.has(task.id)}
+                                  onClick={() => {
+                                    setSelectedTaskId(task.id);
+                                    setSelectedSubtaskId(null);
+                                  }}
+                                  onSelectSubtask={(subId) => {
+                                    setSelectedSubtaskId(subId);
+                                    setSelectedTaskId(null);
+                                  }}
+                                  onToggle={() => handleToggleTask(task.id, task.is_completed)}
+                                  onSubtaskAdded={fetchTasks}
+                                  onContextMenu={handleTaskContextMenu}
+                                />
+                              ))}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Today's tasks section */}
+                      {(() => {
+                        const todayTasks = filteredTasks.filter(t => t.due_date && isToday(parseISO(t.due_date)));
+                        const hasOverdue = filteredTasks.some(t => {
+                          const taskDate = t.due_date ? new Date(t.due_date.split('T')[0]) : null;
+                          const todayDate = new Date(new Date().toISOString().split('T')[0]);
+                          return taskDate && taskDate < todayDate && !t.is_completed;
+                        });
+
+                        return (
+                          <div className="today-tasks-section">
+                            {hasOverdue && todayTasks.length > 0 && (
+                              <h4 style={{ 
+                                color: 'var(--text-secondary)', 
+                                fontSize: '0.78rem', 
+                                fontWeight: 700, 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '0.75px', 
+                                marginBottom: '10px',
+                                opacity: 0.6
+                              }}>
+                                Tareas de Hoy
+                              </h4>
+                            )}
+                            {todayTasks.map(task => (
+                              <TaskItem 
+                                key={task.id} 
+                                task={task} 
+                                isSelected={selectedTaskId === task.id}
+                                selectedSubtaskId={selectedSubtaskId}
+                                isSyncing={syncingTaskIds.has(task.id)}
+                                onClick={() => {
+                                  setSelectedTaskId(task.id);
+                                  setSelectedSubtaskId(null);
+                                }}
+                                onSelectSubtask={(subId) => {
+                                  setSelectedSubtaskId(subId);
+                                  setSelectedTaskId(null);
+                                }}
+                                onToggle={() => handleToggleTask(task.id, task.is_completed)}
+                                onSubtaskAdded={fetchTasks}
+                                onContextMenu={handleTaskContextMenu}
+                              />
+                            ))}
+                            {todayTasks.length === 0 && hasOverdue && (
+                              <div style={{ padding: '16px 8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic', opacity: 0.6 }}>
+                                No hay tareas agendadas para hoy.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </>
                   ) : (
-                    // Default rendering for inbox/today/upcoming
+                    // Default rendering for inbox/upcoming
                     filteredTasks.map(task => (
                       <TaskItem 
                         key={task.id} 

@@ -672,6 +672,217 @@ body {
   z-index: 10;
 }
 
+/* Month View Layout Styles */
+.calendar-month-days-header {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.month-day-header-label {
+  flex: 1;
+  text-align: center;
+  padding: 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-right: 1px solid var(--border-color);
+}
+
+.month-day-header-label:last-child {
+  border-right: none;
+}
+
+.calendar-month-grid-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  min-height: 600px;
+}
+
+.month-grid-cell {
+  background: rgba(255, 255, 255, 0.005);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  min-height: 100px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.month-grid-cell.drag-over {
+  background: rgba(124, 58, 237, 0.08) !important;
+  border: 1px dashed rgba(124, 58, 237, 0.4) !important;
+  box-shadow: inset 0 0 10px rgba(124, 58, 237, 0.15) !important;
+}
+
+.month-grid-cell:nth-child(7n) {
+  border-right: none;
+}
+
+.month-grid-cell:nth-child(n+36) {
+  border-bottom: none;
+}
+
+.month-grid-cell:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.month-grid-cell.other-month {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.month-grid-cell.other-month .month-day-number {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.month-grid-cell.today {
+  background: rgba(91, 33, 182, 0.03); /* subtle accent tint */
+}
+
+.month-day-number-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 0.25rem;
+}
+
+.month-cell-add-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.month-grid-cell:hover .month-cell-add-btn {
+  opacity: 0.6;
+}
+
+.month-grid-cell:hover .month-cell-add-btn:hover {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.month-day-number {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.month-day-number.today-badge {
+  background: var(--accent-color);
+  color: #ffffff !important;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(91, 33, 182, 0.4);
+}
+
+.month-events-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-right: 2px;
+}
+
+/* Hide scrollbar for events list but allow scrolling */
+.month-events-list::-webkit-scrollbar {
+  width: 3px;
+}
+.month-events-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.month-events-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.month-event-item {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s ease, transform 0.1s ease;
+  user-select: none;
+}
+
+.month-event-item.dragging {
+  opacity: 0.3 !important;
+  background: rgba(255, 255, 255, 0.01) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.1) !important;
+}
+
+.month-event-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.month-event-item.completed {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.month-event-title {
+  color: var(--text-primary);
+}
+
+/* Drag-to-Create Preview Styles */
+.drag-create-preview {
+  background: rgba(139, 92, 246, 0.12); /* Purple tint */
+  border: 2px dashed rgba(139, 92, 246, 0.6);
+  border-radius: 6px;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.drag-create-time-badge {
+  background: rgba(91, 33, 182, 0.85); /* Accent color */
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+
 /* Custom Date and Reminder Styles */
 .date-reminder-wrapper {
   position: relative;
@@ -705,6 +916,19 @@ body {
   border-color: rgba(124, 58, 237, 0.3);
   background: rgba(124, 58, 237, 0.05);
 }
+
+.date-reminder-trigger-btn.has-deadline {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.date-reminder-trigger-btn.has-deadline:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
 
 .date-picker-popover {
   position: absolute;
@@ -1262,6 +1486,44 @@ input:checked + .slider:before {
   pointer-events: none;
   height: 0;
   font-style: italic;
+}
+
+/* Color Alert Blocks */
+.editor-alert-block {
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin: 12px 0;
+  display: block;
+  font-size: 0.88rem;
+  border-left: 4px solid transparent;
+  color: var(--text-primary);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editor-alert-block.type-info {
+  background: rgba(59, 130, 246, 0.08);
+  border-left-color: #3b82f6;
+}
+
+.editor-alert-block.type-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-left-color: #f59e0b;
+}
+
+.editor-alert-block.type-success {
+  background: rgba(16, 185, 129, 0.08);
+  border-left-color: #10b981;
+}
+
+.editor-alert-block.type-danger {
+  background: rgba(239, 68, 68, 0.08);
+  border-left-color: #ef4444;
+}
+
+.editor-alert-block p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* Tooltip (Bubble Menu) Dark Mode */
@@ -2164,7 +2426,7 @@ input:checked + .slider:before {
 }
 
 .calendar-quick-create-popover {
-  width: 240px;
+  width: 280px;
   background: rgba(18, 18, 24, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
