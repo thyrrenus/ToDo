@@ -12,6 +12,7 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import { Highlight } from '@tiptap/extension-highlight';
 import { Node } from '@tiptap/core';
+import { Copy, FileText, FileCode, Sparkles, Check } from 'lucide-react';
 
 // Code block syntax highlighting imports
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
@@ -270,6 +271,10 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
   const [showPlusButton, setShowPlusButton] = useState(false);
   const [plusButtonPosition, setPlusButtonPosition] = useState({ top: 0 });
 
+  const [showCopyMenu, setShowCopyMenu] = useState(false);
+  const [showBubbleCopyMenu, setShowBubbleCopyMenu] = useState(false);
+  const [copiedBadge, setCopiedBadge] = useState(false);
+
   // Refs for callbacks to prevent re-binding event listeners
   const onChangeRef = useRef(onChange);
   const onCreateSubtaskRef = useRef(onCreateSubtask);
@@ -445,21 +450,69 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     }
   };
 
-  const copySelectionAsMarkdown = async () => {
+  const copySelection = async (format) => {
     if (!editor) return;
+    const { selection } = editor.state;
+    if (selection.empty) return;
+
     const nativeSelection = window.getSelection();
-    if (nativeSelection && nativeSelection.rangeCount > 0) {
-      const nativeRange = nativeSelection.getRangeAt(0);
-      const container = document.createElement('div');
-      container.appendChild(nativeRange.cloneContents());
-      const html = container.innerHTML;
-      const markdown = htmlToMarkdown(html);
-      
-      try {
+    if (!nativeSelection || nativeSelection.rangeCount === 0) return;
+    const range = nativeSelection.getRangeAt(0);
+    const container = document.createElement('div');
+    container.appendChild(range.cloneContents());
+    const html = container.innerHTML;
+    const markdown = htmlToMarkdown(html);
+    const plainText = nativeSelection.toString();
+
+    try {
+      if (format === 'markdown') {
         await navigator.clipboard.writeText(markdown);
-      } catch (err) {
-        console.error('Failed to copy to clipboard', err);
+      } else if (format === 'text') {
+        await navigator.clipboard.writeText(plainText);
+      } else if (format === 'html') {
+        if (navigator.clipboard && window.ClipboardItem) {
+          const item = new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' })
+          });
+          await navigator.clipboard.write([item]);
+        } else {
+          await navigator.clipboard.writeText(plainText);
+        }
       }
+      setCopiedBadge('¡Selección copiada!');
+      setTimeout(() => setCopiedBadge(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy selection:', err);
+    }
+  };
+
+  const copyFullDescription = async (format) => {
+    if (!editor) return;
+    const html = editor.getHTML();
+    const markdown = htmlToMarkdown(html);
+    const plainText = editor.getText();
+
+    try {
+      if (format === 'markdown') {
+        await navigator.clipboard.writeText(markdown);
+      } else if (format === 'text') {
+        await navigator.clipboard.writeText(plainText);
+      } else if (format === 'html') {
+        if (navigator.clipboard && window.ClipboardItem) {
+          const item = new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' })
+          });
+          await navigator.clipboard.write([item]);
+        } else {
+          await navigator.clipboard.writeText(plainText);
+        }
+      }
+      setCopiedBadge('¡Descripción copiada!');
+      setTimeout(() => setCopiedBadge(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy description:', err);
     }
   };
 
@@ -1076,6 +1129,8 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
     const handleOutsideClick = () => {
       setShowColMenu(false);
       setShowRowMenu(false);
+      setShowCopyMenu(false);
+      setShowBubbleCopyMenu(false);
     };
 
     viewDom.addEventListener('contextmenu', handleNativeContextMenu);
@@ -1383,6 +1438,70 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
         </button>
       )}
 
+      {/* Global Copy Button */}
+      <div className={`editor-global-copy-container ${showCopyMenu ? 'menu-open' : ''}`} style={{ position: 'absolute', top: '6px', right: '6px', zIndex: 12 }}>
+        <button
+          type="button"
+          className={`editor-global-copy-btn ${showCopyMenu ? 'active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowCopyMenu(!showCopyMenu);
+            setShowBubbleCopyMenu(false);
+          }}
+          title="Copiar descripción"
+        >
+          <Copy size={13} />
+        </button>
+        
+        {showCopyMenu && (
+          <div className="editor-color-dropdown editor-copy-dropdown global-copy-dropdown">
+            <div className="editor-color-dropdown-title">Copiar Descripción</div>
+            <button
+              key="copy-full-text"
+              type="button"
+              className="editor-color-dropdown-item"
+              onClick={() => {
+                copyFullDescription('text');
+                setShowCopyMenu(false);
+              }}
+            >
+              <FileText size={12} />
+              <span>Texto Plano</span>
+            </button>
+            <button
+              key="copy-full-markdown"
+              type="button"
+              className="editor-color-dropdown-item"
+              onClick={() => {
+                copyFullDescription('markdown');
+                setShowCopyMenu(false);
+              }}
+            >
+              <FileCode size={12} />
+              <span>Markdown</span>
+            </button>
+            <button
+              key="copy-full-html"
+              type="button"
+              className="editor-color-dropdown-item"
+              onClick={() => {
+                copyFullDescription('html');
+                setShowCopyMenu(false);
+              }}
+            >
+              <Sparkles size={12} />
+              <span>Con Formato (HTML/Tablas)</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {copiedBadge && (
+        <div className="editor-copy-toast-badge">
+          <span>{copiedBadge}</span>
+        </div>
+      )}
+
       <EditorContent editor={editor} className="quill-editor-wrapper" />
 
       {editor && (
@@ -1522,6 +1641,63 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
               )}
             </div>
 
+            {/* Copy Dropdown */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                type="button"
+                className={`table-bubble-btn ${showBubbleCopyMenu ? 'active' : ''}`}
+                onClick={() => {
+                  setShowBubbleCopyMenu(!showBubbleCopyMenu);
+                  setShowColorPicker(false);
+                  setShowHighlightPicker(false);
+                }}
+                title="Copiar Selección"
+              >
+                <Copy size={13} />
+              </button>
+              {showBubbleCopyMenu && (
+                <div className="editor-color-dropdown editor-copy-dropdown">
+                  <div className="editor-color-dropdown-title">Copiar Selección</div>
+                  <button
+                    key="copy-selection-text"
+                    type="button"
+                    className="editor-color-dropdown-item"
+                    onClick={() => {
+                      copySelection('text');
+                      setShowBubbleCopyMenu(false);
+                    }}
+                  >
+                    <FileText size={12} />
+                    <span>Texto Plano</span>
+                  </button>
+                  <button
+                    key="copy-selection-markdown"
+                    type="button"
+                    className="editor-color-dropdown-item"
+                    onClick={() => {
+                      copySelection('markdown');
+                      setShowBubbleCopyMenu(false);
+                    }}
+                  >
+                    <FileCode size={12} />
+                    <span>Markdown</span>
+                  </button>
+                  <button
+                    key="copy-selection-html"
+                    type="button"
+                    className="editor-color-dropdown-item"
+                    onClick={() => {
+                      copySelection('html');
+                      setShowBubbleCopyMenu(false);
+                    }}
+                  >
+                    <Sparkles size={12} />
+                    <span>Con Formato (HTML)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               className="table-bubble-btn danger"
@@ -1655,21 +1831,50 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
           </div>
 
           <div className="context-menu-submenu-header">
-            <span>📋 Markdown</span>
+            <span>📋 Copiar selección</span>
             <div className="context-menu-submenu">
               <div 
-                className={`context-menu-item ${
-                  editor?.state.selection.empty ? 'disabled' : ''
-                }`}
-                onClick={copySelectionAsMarkdown}
-                style={
-                  editor?.state.selection.empty 
-                    ? { opacity: 0.4, cursor: 'not-allowed' } 
-                    : {}
-                }
+                className={`context-menu-item ${editor?.state.selection.empty ? 'disabled' : ''}`}
+                onClick={() => copySelection('text')}
+                style={editor?.state.selection.empty ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
               >
-                <span>Copiar como MD</span>
+                <span>Texto Plano</span>
               </div>
+              <div 
+                className={`context-menu-item ${editor?.state.selection.empty ? 'disabled' : ''}`}
+                onClick={() => copySelection('markdown')}
+                style={editor?.state.selection.empty ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+              >
+                <span>Markdown</span>
+              </div>
+              <div 
+                className={`context-menu-item ${editor?.state.selection.empty ? 'disabled' : ''}`}
+                onClick={() => copySelection('html')}
+                style={editor?.state.selection.empty ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+              >
+                <span>Con Formato (HTML/Tablas)</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="context-menu-submenu-header">
+            <span>📄 Copiar todo</span>
+            <div className="context-menu-submenu">
+              <div className="context-menu-item" onClick={() => copyFullDescription('text')}>
+                <span>Como Texto Plano</span>
+              </div>
+              <div className="context-menu-item" onClick={() => copyFullDescription('markdown')}>
+                <span>Como Markdown</span>
+              </div>
+              <div className="context-menu-item" onClick={() => copyFullDescription('html')}>
+                <span>Con Formato (HTML/Tablas)</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="context-menu-submenu-header">
+            <span>📥 Pegar / Importar</span>
+            <div className="context-menu-submenu">
               <div className="context-menu-item" onClick={pasteMarkdownFromClipboard}>
                 <span>Pegar desde MD</span>
               </div>

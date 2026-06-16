@@ -1225,6 +1225,136 @@ export function CalendarView() {
     );
   };
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+
+  const todayTasks = (tasks || []).filter(t => {
+    const isDueToday = t.due_date && t.due_date.startsWith(todayStr);
+    const hasTodayStart = t.start_time && isSameDay(parseDate(t.start_time), startOfToday());
+    return isDueToday || hasTodayStart;
+  });
+
+  const tomorrowTasks = (tasks || []).filter(t => {
+    const isDueTomorrow = t.due_date && t.due_date.startsWith(tomorrowStr);
+    const hasTomorrowStart = t.start_time && isSameDay(parseDate(t.start_time), addDays(startOfToday(), 1));
+    return isDueTomorrow || hasTomorrowStart;
+  });
+
+  const todayEvents = scheduledEvents.filter(e => isSameDay(e.start, startOfToday()));
+  const sortedTodayEvents = [...todayEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const renderDailyAgendaSidebar = () => {
+    if (isMobile) return null;
+    return (
+      <div className="calendar-schedule-sidebar">
+        {/* Hoy Section */}
+        <div className="sidebar-agenda-section">
+          <h3 className="agenda-section-title">Hoy</h3>
+          <div className="agenda-items-list">
+            {todayTasks.length === 0 ? (
+              <div className="agenda-empty-msg">No hay tareas para hoy</div>
+            ) : (
+              todayTasks.map(t => {
+                const color = getListColor(t.list_id);
+                return (
+                  <div 
+                    key={t.id} 
+                    className={`agenda-task-item ${t.is_completed ? 'completed' : ''}`}
+                    onClick={() => onSelectTask(t.id)}
+                  >
+                    <div 
+                      className={`checkbox priority-${t.priority || 0}`}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await onUpdateTask(t.id, { is_completed: !t.is_completed });
+                      }}
+                    >
+                      {t.is_completed && <Check size={12} color="#0f1115" />}
+                    </div>
+                    <span className="agenda-item-title" style={{ borderLeft: `3px solid ${color}`, paddingLeft: '8px' }}>
+                      {t.title}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Scheduled Events Section */}
+        <div className="sidebar-agenda-section">
+          <h3 className="agenda-section-title">Programado</h3>
+          <div className="agenda-items-list">
+            {sortedTodayEvents.length === 0 ? (
+              <div className="agenda-empty-msg">Sin eventos hoy</div>
+            ) : (
+              sortedTodayEvents.map(e => {
+                const color = e.isExternal ? '#0078d4' : getListColor(e.list_id);
+                const timeStr = `${format(e.start, 'HH:mm')} - ${format(e.end, 'HH:mm')}`;
+                return (
+                  <div 
+                    key={e.id} 
+                    className={`agenda-event-item ${e.isCompleted ? 'completed' : ''}`}
+                    onClick={() => {
+                      if (e.isExternal) {
+                        if (onSelectEvent) onSelectEvent(e.itemId, false);
+                      } else {
+                        if (e.isSubtask) {
+                          setSelectedTaskId(e.parentTaskId);
+                          setSelectedSubtaskId(e.itemId);
+                        } else {
+                          onSelectTask(e.itemId);
+                        }
+                      }
+                    }}
+                    style={{ borderLeft: `3px solid ${color}` }}
+                  >
+                    <div className="agenda-event-time">{timeStr}</div>
+                    <div className="agenda-event-title">{e.title}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Tomorrow Section */}
+        <div className="sidebar-agenda-section">
+          <h3 className="agenda-section-title">Mañana</h3>
+          <div className="agenda-items-list">
+            {tomorrowTasks.length === 0 ? (
+              <div className="agenda-empty-msg">No hay tareas para mañana</div>
+            ) : (
+              tomorrowTasks.map(t => {
+                const color = getListColor(t.list_id);
+                return (
+                  <div 
+                    key={t.id} 
+                    className={`agenda-task-item ${t.is_completed ? 'completed' : ''}`}
+                    onClick={() => onSelectTask(t.id)}
+                  >
+                    <div 
+                      className={`checkbox priority-${t.priority || 0}`}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await onUpdateTask(t.id, { is_completed: !t.is_completed });
+                      }}
+                    >
+                      {t.is_completed && <Check size={12} color="#0f1115" />}
+                    </div>
+                    <span className="agenda-item-title" style={{ borderLeft: `3px solid ${color}`, paddingLeft: '8px' }}>
+                      {t.title}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (showAIRescheduleModal) {
       calculateAIReschedule();
@@ -1330,7 +1460,10 @@ export function CalendarView() {
         </div>
       )}
 
-      <div className="calendar-grid-container">
+      <div className="calendar-body-layout">
+        {renderDailyAgendaSidebar()}
+        <div className="calendar-main-area">
+          <div className="calendar-grid-container">
         {viewMode === 'month' ? (
           <>
             {/* Month Grid Header */}
@@ -1780,6 +1913,8 @@ export function CalendarView() {
             </div>
           </>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Floating Hover Card */}

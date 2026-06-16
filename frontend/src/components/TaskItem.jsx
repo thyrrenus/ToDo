@@ -139,7 +139,7 @@ export const TaskItem = memo(function TaskItem({ task, isSelected, selectedSubta
           </div>
         ) : (
           <div 
-            className={`checkbox ${isSyncing ? 'syncing' : ''}`} 
+            className={`checkbox priority-${task.priority || 0} ${isSyncing ? 'syncing' : ''}`} 
             onClick={(e) => { 
               e.stopPropagation(); 
               if (!isSyncing) onToggle(); 

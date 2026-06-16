@@ -276,6 +276,46 @@ body {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.checkbox.priority-3 {
+  border-color: #ef4444;
+}
+
+.checkbox.priority-3:hover {
+  border-color: #f87171;
+  background-color: rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+}
+
+.checkbox.priority-2 {
+  border-color: #eab308;
+}
+
+.checkbox.priority-2:hover {
+  border-color: #facc15;
+  background-color: rgba(234, 179, 8, 0.1);
+  box-shadow: 0 0 8px rgba(234, 179, 8, 0.35);
+}
+
+.checkbox.priority-1 {
+  border-color: #3b82f6;
+}
+
+.checkbox.priority-1:hover {
+  border-color: #60a5fa;
+  background-color: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.35);
+}
+
+.checkbox.priority-0 {
+  border-color: var(--text-secondary);
+}
+
+.checkbox.priority-0:hover {
+  border-color: var(--accent-hover);
+  background-color: rgba(124, 58, 237, 0.05);
 }
 
 .checkbox:hover {
@@ -283,6 +323,26 @@ body {
 }
 
 .completed .checkbox {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.completed .checkbox.priority-3 {
+  background-color: #ef4444;
+  border-color: #ef4444;
+}
+
+.completed .checkbox.priority-2 {
+  background-color: #eab308;
+  border-color: #eab308;
+}
+
+.completed .checkbox.priority-1 {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.completed .checkbox.priority-0 {
   background-color: var(--accent-hover);
   border-color: var(--accent-hover);
 }
@@ -3934,4 +3994,328 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
 .quick-add-popover-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
+}
+
+/* Custom styling for copy functions */
+.editor-global-copy-container {
+  opacity: 0.15;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.rich-text-editor-container:hover .editor-global-copy-container,
+.editor-global-copy-container.menu-open {
+  opacity: 1;
+}
+
+.editor-global-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease-out;
+}
+
+.editor-global-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.editor-global-copy-btn.active {
+  background: var(--accent-hover);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+}
+
+.editor-copy-dropdown {
+  min-width: 180px;
+  padding: 6px !important;
+}
+
+.editor-copy-dropdown .editor-color-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.editor-copy-dropdown .editor-color-dropdown-item svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.editor-copy-dropdown .editor-color-dropdown-item:hover svg {
+  color: var(--text-primary);
+}
+
+.global-copy-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
+  background: rgba(20, 20, 25, 0.95) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+  animation: slideUpFade 0.2s ease-out;
+}
+
+/* Success Copy Toast Badge */
+.editor-copy-toast-badge {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 185, 129, 0.95); /* Emerald green */
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  animation: toastFadeInOut 2s ease-in-out forwards;
+}
+
+@keyframes toastFadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+}
+
+/* ==========================================================================
+   TICKTICK-STYLE TASK ITEM REDESIGN
+   ========================================================================== */
+@media (min-width: 601px) {
+  /* On desktop, align task title and metadata in a single line */
+  .task-content {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.5rem 1rem !important;
+  }
+
+  .task-title-wrapper {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .task-title {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+  }
+
+  .task-meta {
+    flex-shrink: 0 !important;
+    margin-top: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  /* Inline add subtask form must wrap to its own line */
+  .inline-add-subtask-form {
+    width: 100% !important;
+    margin-top: 0.25rem !important;
+  }
+}
+
+@media (max-width: 600px) {
+  /* On mobile, fall back to two-line layout for touch targets */
+  .task-content {
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+  }
+  .task-title-wrapper {
+    width: 100% !important;
+  }
+  .task-meta {
+    margin-top: 2px !important;
+    width: 100% !important;
+  }
+}
+
+/* ==========================================================================
+   CALENDAR DAILY AGENDA SIDEBAR (TaskForge Style)
+   ========================================================================== */
+.calendar-body-layout {
+  display: flex;
+  flex: 1;
+  gap: 1.25rem;
+  min-height: 0;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.calendar-main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.calendar-schedule-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: rgba(26, 26, 30, 0.45);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1.25rem;
+  overflow-y: auto;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-agenda-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.agenda-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.35rem;
+  margin: 0;
+}
+
+.agenda-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.agenda-empty-msg {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 0.25rem 0.5rem;
+  opacity: 0.7;
+}
+
+/* Agenda Task Item */
+.agenda-task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.agenda-task-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.agenda-task-item.completed {
+  opacity: 0.5;
+}
+
+.agenda-task-item.completed .agenda-item-title {
+  text-decoration: line-through;
+}
+
+.agenda-item-title {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Agenda Event Item */
+.agenda-event-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.agenda-event-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.agenda-event-item.completed {
+  opacity: 0.5;
+}
+
+.agenda-event-item.completed .agenda-event-title {
+  text-decoration: line-through;
+}
+
+.agenda-event-time {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent-hover);
+}
+
+.agenda-event-title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hide on medium and mobile screens */
+@media (max-width: 1024px) {
+  .calendar-schedule-sidebar {
+    display: none !important;
+  }
 }

@@ -509,13 +509,12 @@ export function AnalyticsView({ tasks, lists, onRefreshTasks }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
                         <div 
-                          className="checkbox" 
+                          className={`checkbox priority-${task.priority || 0}`} 
                           onClick={() => handleToggleTask(task.id, task.is_completed)} 
                           style={{
                             width: '18px',
                             height: '18px',
                             borderRadius: '4px',
-                            border: '2px solid var(--text-secondary)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -821,13 +820,12 @@ export function AnalyticsView({ tasks, lists, onRefreshTasks }) {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
                         <div 
-                          className="checkbox" 
+                          className={`checkbox priority-${task.priority || 0}`} 
                           onClick={() => handleToggleTask(task.id, task.is_completed)} 
                           style={{
                             width: '18px',
                             height: '18px',
                             borderRadius: '4px',
-                            border: '2px solid var(--text-secondary)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1036,13 +1034,12 @@ export function AnalyticsView({ tasks, lists, onRefreshTasks }) {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                           <div 
-                            className="checkbox" 
+                            className={`checkbox priority-${task.priority || 0}`} 
                             onClick={() => handleToggleTask(task.id, task.is_completed)} 
                             style={{
                               width: '18px',
                               height: '18px',
                               borderRadius: '4px',
-                              border: '2px solid var(--text-secondary)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1263,13 +1260,12 @@ export function AnalyticsView({ tasks, lists, onRefreshTasks }) {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <div 
-                                className="checkbox" 
+                                className={`checkbox priority-${task.priority || 0}`} 
                                 onClick={() => handleToggleTask(task.id, task.is_completed)} 
                                 style={{
                                   width: '16px',
                                   height: '16px',
                                   borderRadius: '4px',
-                                  border: '2px solid var(--text-secondary)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',

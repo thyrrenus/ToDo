@@ -314,7 +314,7 @@ export function KanbanView() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {/* Checkbox */}
                           <div 
-                            className="checkbox" 
+                            className={`checkbox priority-${task.priority || 0}`} 
                             onClick={(e) => { 
                               e.stopPropagation(); 
                               handleToggleTask(task.id, task.is_completed); 
@@ -323,7 +323,6 @@ export function KanbanView() {
                               width: '14px', 
                               height: '14px', 
                               borderRadius: '3px', 
-                              border: '1px solid var(--text-secondary)', 
                               display: 'flex', 
                               alignItems: 'center', 
                               justifyContent: 'center', 

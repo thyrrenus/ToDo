@@ -219,12 +219,12 @@ export function EisenhowerView() {
                       >
                         {/* Checkbox */}
                         <div 
-                          className="checkbox" 
+                          className={`checkbox priority-${task.priority || 0}`} 
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             handleToggleTask(task.id, task.is_completed); 
                           }}
-                          style={{ width: '16px', height: '16px', borderRadius: '4px', border: '1px solid var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                          style={{ width: '16px', height: '16px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                         >
                           {task.is_completed && <Check size={10} color="#0f1115" />}
                         </div>
