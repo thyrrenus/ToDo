@@ -4319,3 +4319,18 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
     display: none !important;
   }
 }
+
+/* Drag and Drop feedback for Calendar View */
+.agenda-task-item[draggable="true"] {
+  cursor: grab;
+}
+
+.agenda-task-item.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.day-column.drag-over {
+  background: rgba(124, 58, 237, 0.06) !important;
+  box-shadow: inset 0 0 12px rgba(124, 58, 237, 0.12) !important;
+}

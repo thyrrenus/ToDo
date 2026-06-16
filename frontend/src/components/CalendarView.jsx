@@ -539,19 +539,72 @@ export function CalendarView() {
     const itemId = parseInt(itemIdStr, 10);
     const isSubtask = isSubtaskStr === 'true';
 
+    let durationMs = 60 * 60 * 1000; // default 1 hour
+    let originalStart = null;
+
     // Find the original event to get the original start/end difference (duration)
     const eventItem = scheduledEvents.find(ev => ev.itemId === itemId && ev.isSubtask === isSubtask);
-    if (!eventItem) return;
+    if (eventItem) {
+      originalStart = eventItem.start;
+      durationMs = eventItem.end.getTime() - originalStart.getTime();
+    } else if (!isSubtask) {
+      const task = (tasks || []).find(t => t.id === itemId);
+      if (!task) return;
+    } else {
+      return;
+    }
 
-    const originalStart = eventItem.start;
-    const originalEnd = eventItem.end;
-    const durationMs = originalEnd.getTime() - originalStart.getTime();
-
-    // Set new start time keeping the hours and minutes of originalStart
+    // Set new start time keeping the hours and minutes of originalStart, or default to 9:00 AM
     const newStart = new Date(targetDay);
-    newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), originalStart.getSeconds(), originalStart.getMilliseconds());
+    if (originalStart) {
+      newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), originalStart.getSeconds(), originalStart.getMilliseconds());
+    } else {
+      newStart.setHours(9, 0, 0, 0); // Default to 9:00 AM
+    }
 
     // Set new end time adding the duration
+    const newEnd = new Date(newStart.getTime() + durationMs);
+
+    const pad = (num) => String(num).padStart(2, '0');
+    const startTimeStr = `${newStart.getFullYear()}-${pad(newStart.getMonth() + 1)}-${pad(newStart.getDate())}T${pad(newStart.getHours())}:${pad(newStart.getMinutes())}`;
+    const endTimeStr = `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`;
+
+    if (onUpdateEvent) {
+      await onUpdateEvent(itemId, isSubtask, startTimeStr, endTimeStr);
+    }
+  };
+
+  const handleColumnDrop = async (e, targetDay) => {
+    e.preventDefault();
+    const itemIdStr = e.dataTransfer.getData('text/plain');
+    const isSubtaskStr = e.dataTransfer.getData('isSubtask');
+    if (!itemIdStr) return;
+
+    const itemId = parseInt(itemIdStr, 10);
+    const isSubtask = isSubtaskStr === 'true';
+
+    // Calculate time based on drop Y coordinate relative to the column
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dropY = e.clientY - rect.top;
+    
+    // Snap to 30-minute intervals (30px)
+    const snapMinutes = 30;
+    const pixelsPerSnap = (snapMinutes / 60) * PIXELS_PER_HOUR; // 30px
+    const snappedY = Math.max(0, Math.min(Math.round(dropY / pixelsPerSnap) * pixelsPerSnap, 23.5 * PIXELS_PER_HOUR));
+    
+    const startTotalMinutes = (snappedY / PIXELS_PER_HOUR) * 60;
+    const startHour = Math.floor(startTotalMinutes / 60);
+    const startMins = Math.round(startTotalMinutes % 60);
+
+    const newStart = new Date(targetDay);
+    newStart.setHours(startHour, startMins, 0, 0);
+
+    let durationMs = 60 * 60 * 1000; // default 1 hour
+    const eventItem = scheduledEvents.find(ev => ev.itemId === itemId && ev.isSubtask === isSubtask);
+    if (eventItem) {
+      durationMs = eventItem.end.getTime() - eventItem.start.getTime();
+    }
+
     const newEnd = new Date(newStart.getTime() + durationMs);
 
     const pad = (num) => String(num).padStart(2, '0');
@@ -1240,6 +1293,10 @@ export function CalendarView() {
     return isDueTomorrow || hasTomorrowStart;
   });
 
+  const unscheduledTasks = (tasks || []).filter(t => {
+    return !t.is_completed && t.type !== 'note' && !t.due_date && !t.start_time && !t.end_time;
+  });
+
   const todayEvents = scheduledEvents.filter(e => isSameDay(e.start, startOfToday()));
   const sortedTodayEvents = [...todayEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -1247,6 +1304,50 @@ export function CalendarView() {
     if (isMobile) return null;
     return (
       <div className="calendar-schedule-sidebar">
+        {/* Sin Planificar Section */}
+        <div className="sidebar-agenda-section">
+          <h3 className="agenda-section-title">Sin Planificar</h3>
+          <div className="agenda-items-list unscheduled-tasks-list">
+            {unscheduledTasks.length === 0 ? (
+              <div className="agenda-empty-msg">No hay tareas sin planificar</div>
+            ) : (
+              unscheduledTasks.map(t => {
+                const color = getListColor(t.list_id);
+                return (
+                  <div 
+                    key={t.id} 
+                    className={`agenda-task-item ${t.is_completed ? 'completed' : ''}`}
+                    onClick={() => onSelectTask(t.id)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', t.id.toString());
+                      e.dataTransfer.setData('isSubtask', 'false');
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.currentTarget.classList.add('dragging');
+                    }}
+                    onDragEnd={(e) => {
+                      e.currentTarget.classList.remove('dragging');
+                    }}
+                  >
+                    <div 
+                      className={`checkbox priority-${t.priority || 0}`}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await onUpdateTask(t.id, { is_completed: !t.is_completed });
+                      }}
+                    >
+                      {t.is_completed && <Check size={12} color="#0f1115" />}
+                    </div>
+                    <span className="agenda-item-title" style={{ borderLeft: `3px solid ${color}`, paddingLeft: '8px' }}>
+                      {t.title}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
         {/* Hoy Section */}
         <div className="sidebar-agenda-section">
           <h3 className="agenda-section-title">Hoy</h3>
@@ -1712,6 +1813,20 @@ export function CalendarView() {
                         key={day.toString()} 
                         className="day-column"
                         onMouseDown={(e) => handleColumnMouseDown(e, day)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDragEnter={(e) => {
+                          e.currentTarget.classList.add('drag-over');
+                        }}
+                        onDragLeave={(e) => {
+                          e.currentTarget.classList.remove('drag-over');
+                        }}
+                        onDrop={(e) => {
+                          e.currentTarget.classList.remove('drag-over');
+                          handleColumnDrop(e, day);
+                        }}
                       >
                         {/* Grid lines */}
                         {hours.map(hour => (
