@@ -1110,8 +1110,24 @@ export function RichTextEditor({ value, onChange, placeholder, tasks = [], onCre
 
     const handleCopy = (e) => {
       const { selection } = editor.state;
-      if (selection.empty) return;
 
+      if (selection.empty) {
+        // No selection → copy the entire description with rich formatting
+        e.preventDefault();
+        const html = editor.getHTML();
+        const plainText = editor.getText();
+
+        // Write both text/html and text/plain so paste targets keep formatting
+        e.clipboardData.setData('text/html', html);
+        e.clipboardData.setData('text/plain', plainText);
+
+        // Show a brief badge to confirm the copy
+        setCopiedBadge('¡Descripción copiada!');
+        setTimeout(() => setCopiedBadge(false), 2000);
+        return;
+      }
+
+      // Selection present → copy selected content as HTML + Markdown plain text
       e.preventDefault();
       const nativeSelection = window.getSelection();
       if (nativeSelection && nativeSelection.rangeCount > 0) {
