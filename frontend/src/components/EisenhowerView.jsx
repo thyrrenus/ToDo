@@ -88,14 +88,14 @@ export function EisenhowerView() {
 
   // ── Filtered tasks (Feature 1) ──────────────────────────────────────────
   const activeIncompleteTasks = useMemo(() => {
-    const base = tasks.filter(t => !t.is_completed);
+    const base = tasks.filter(t => !t.is_completed && t.type !== 'note');
     if (selectedListId === 'all') return base;
     return base.filter(t => (t.list_id ?? 'inbox') === selectedListId);
   }, [tasks, selectedListId]);
 
   // ── Lists with at least one active task (for chip bar) ──────────────────
   const listsWithTasks = useMemo(() => {
-    const base = tasks.filter(t => !t.is_completed);
+    const base = tasks.filter(t => !t.is_completed && t.type !== 'note');
     const seen = new Set();
     const result = [];
     base.forEach(t => {
