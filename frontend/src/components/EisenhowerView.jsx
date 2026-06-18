@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Calendar, Plus, LayoutGrid, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, Plus, LayoutGrid, Check, ChevronDown, ChevronRight, Layers, List } from 'lucide-react';
 import { useTodo } from '../context/TodoContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -31,6 +31,7 @@ export function EisenhowerView() {
 
   // ── Feature 1: List filter ──────────────────────────────────────────────
   const [selectedListId, setSelectedListId] = useState('all'); // 'all' | list.id
+  const [groupedView, setGroupedView] = useState(true);
 
   // ── Feature 3: Collapsed list-groups within a quadrant ─────────────────
   const [collapsedGroups, setCollapsedGroups] = useState({}); // key: `${qPriority}-${listId}`
@@ -119,7 +120,7 @@ export function EisenhowerView() {
     return Object.values(groups);
   };
 
-  const shouldGroup = selectedListId === 'all';
+  const shouldGroup = groupedView && selectedListId === 'all' && listsWithTasks.length > 1;
 
   return (
     <div className="eisenhower-view-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '100%', height: 'auto', padding: '1rem 0' }}>
@@ -135,54 +136,110 @@ export function EisenhowerView() {
         </p>
       </div>
 
-      {/* ── Feature 1: List filter chip bar ────────────────────────────── */}
+      {/* ── Feature 1: List filter chip bar & View toggle ───────────────── */}
       {listsWithTasks.length > 1 && (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* "Todas" chip */}
-          <button
-            onClick={() => setSelectedListId('all')}
-            style={{
-              padding: '4px 12px',
-              borderRadius: '20px',
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              fontFamily: 'inherit',
-              cursor: 'pointer',
-              border: selectedListId === 'all' ? '1.5px solid var(--accent-hover)' : '1.5px solid rgba(255,255,255,0.1)',
-              background: selectedListId === 'all' ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.04)',
-              color: selectedListId === 'all' ? 'var(--accent-hover)' : 'var(--text-secondary)',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Todas
-          </button>
-          {listsWithTasks.map(list => {
-            const active = selectedListId === list.id;
-            return (
-              <button
-                key={list.id}
-                onClick={() => setSelectedListId(active ? 'all' : list.id)}
-                style={{
-                  padding: '4px 12px',
-                  borderRadius: '20px',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  fontFamily: 'inherit',
-                  cursor: 'pointer',
-                  border: active ? `1.5px solid ${list.color}` : '1.5px solid rgba(255,255,255,0.1)',
-                  background: active ? `${list.color}22` : 'rgba(255,255,255,0.04)',
-                  color: active ? list.color : 'var(--text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: list.color, flexShrink: 0 }} />
-                {list.name}
-              </button>
-            );
-          })}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', width: '100%' }}>
+          {/* Chips */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* "Todas" chip */}
+            <button
+              onClick={() => setSelectedListId('all')}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                border: selectedListId === 'all' ? '1.5px solid var(--accent-hover)' : '1.5px solid rgba(255,255,255,0.1)',
+                background: selectedListId === 'all' ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.04)',
+                color: selectedListId === 'all' ? 'var(--accent-hover)' : 'var(--text-secondary)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Todas
+            </button>
+            {listsWithTasks.map(list => {
+              const active = selectedListId === list.id;
+              return (
+                <button
+                  key={list.id}
+                  onClick={() => setSelectedListId(active ? 'all' : list.id)}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    border: active ? `1.5px solid ${list.color}` : '1.5px solid rgba(255,255,255,0.1)',
+                    background: active ? `${list.color}22` : 'rgba(255,255,255,0.04)',
+                    color: active ? list.color : 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: list.color, flexShrink: 0 }} />
+                  {list.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Segmented view mode toggle */}
+          <div style={{
+            display: 'flex',
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '8px',
+            padding: '2px',
+            alignItems: 'center'
+          }}>
+            <button
+              onClick={() => setGroupedView(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                border: 'none',
+                background: groupedView ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                color: groupedView ? 'var(--text-primary)' : 'var(--text-secondary)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Layers size={13} />
+              Agrupado
+            </button>
+            <button
+              onClick={() => setGroupedView(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                border: 'none',
+                background: !groupedView ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                color: !groupedView ? 'var(--text-primary)' : 'var(--text-secondary)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <List size={13} />
+              Lista plana
+            </button>
+          </div>
         </div>
       )}
 
@@ -240,7 +297,7 @@ export function EisenhowerView() {
                   <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem', opacity: 0.5, border: '1px dashed rgba(255,255,255,0.02)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
                     Sin tareas. Arrastra actividades aquí o créalas abajo.
                   </div>
-                ) : shouldGroup && groups.length > 1 ? (
+                ) : shouldGroup ? (
                   /* ── Feature 3: Group by list ──────────────────────────── */
                   <AnimatePresence initial={false}>
                     {groups.map(group => {
