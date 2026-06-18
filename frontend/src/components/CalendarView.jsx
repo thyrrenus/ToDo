@@ -31,6 +31,7 @@ export function CalendarView() {
   const [currentDate, setCurrentDate] = useState(startOfToday());
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [mobileSelectedDay, setMobileSelectedDay] = useState(startOfToday());
+  const [showUnscheduled, setShowUnscheduled] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1304,50 +1305,6 @@ export function CalendarView() {
     if (isMobile) return null;
     return (
       <div className="calendar-schedule-sidebar">
-        {/* Sin Planificar Section */}
-        <div className="sidebar-agenda-section">
-          <h3 className="agenda-section-title">Sin Planificar</h3>
-          <div className="agenda-items-list unscheduled-tasks-list">
-            {unscheduledTasks.length === 0 ? (
-              <div className="agenda-empty-msg">No hay tareas sin planificar</div>
-            ) : (
-              unscheduledTasks.map(t => {
-                const color = getListColor(t.list_id);
-                return (
-                  <div 
-                    key={t.id} 
-                    className={`agenda-task-item ${t.is_completed ? 'completed' : ''}`}
-                    onClick={() => onSelectTask(t.id)}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/plain', t.id.toString());
-                      e.dataTransfer.setData('isSubtask', 'false');
-                      e.dataTransfer.effectAllowed = 'move';
-                      e.currentTarget.classList.add('dragging');
-                    }}
-                    onDragEnd={(e) => {
-                      e.currentTarget.classList.remove('dragging');
-                    }}
-                  >
-                    <div 
-                      className={`checkbox priority-${t.priority || 0}`}
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        await onUpdateTask(t.id, { is_completed: !t.is_completed });
-                      }}
-                    >
-                      {t.is_completed && <Check size={12} color="#0f1115" />}
-                    </div>
-                    <span className="agenda-item-title" style={{ borderLeft: `3px solid ${color}`, paddingLeft: '8px' }}>
-                      {t.title}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
         {/* Hoy Section */}
         <div className="sidebar-agenda-section">
           <h3 className="agenda-section-title">Hoy</h3>
@@ -1451,6 +1408,69 @@ export function CalendarView() {
               })
             )}
           </div>
+        </div>
+
+        {/* Sin Planificar — collapsible, at the bottom */}
+        <div className={`sidebar-agenda-section unscheduled-section ${showUnscheduled ? 'expanded' : 'collapsed'}`}>
+          <button
+            className="unscheduled-toggle-btn"
+            onClick={() => setShowUnscheduled(prev => !prev)}
+            aria-expanded={showUnscheduled}
+            title={showUnscheduled ? 'Ocultar tareas sin planificar' : 'Ver tareas sin planificar'}
+          >
+            <span className="unscheduled-toggle-label">
+              <span className="unscheduled-toggle-icon">{showUnscheduled ? '▾' : '▸'}</span>
+              Sin Planificar
+            </span>
+            {unscheduledTasks.length > 0 && (
+              <span className="unscheduled-count-badge">{unscheduledTasks.length}</span>
+            )}
+          </button>
+
+          {showUnscheduled && (
+            <div className="agenda-items-list unscheduled-tasks-list">
+              {unscheduledTasks.length === 0 ? (
+                <div className="agenda-empty-msg">No hay tareas sin planificar 🎉</div>
+              ) : (
+                <>
+                  <div className="unscheduled-drag-hint">⇄ Arrastra al calendario para planificar</div>
+                  {unscheduledTasks.map(t => {
+                    const color = getListColor(t.list_id);
+                    return (
+                      <div 
+                        key={t.id} 
+                        className={`agenda-task-item ${t.is_completed ? 'completed' : ''}`}
+                        onClick={() => onSelectTask(t.id)}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', t.id.toString());
+                          e.dataTransfer.setData('isSubtask', 'false');
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.currentTarget.classList.add('dragging');
+                        }}
+                        onDragEnd={(e) => {
+                          e.currentTarget.classList.remove('dragging');
+                        }}
+                      >
+                        <div 
+                          className={`checkbox priority-${t.priority || 0}`}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await onUpdateTask(t.id, { is_completed: !t.is_completed });
+                          }}
+                        >
+                          {t.is_completed && <Check size={12} color="#0f1115" />}
+                        </div>
+                        <span className="agenda-item-title" style={{ borderLeft: `3px solid ${color}`, paddingLeft: '8px' }}>
+                          {t.title}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
