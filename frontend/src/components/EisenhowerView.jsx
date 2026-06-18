@@ -352,6 +352,8 @@ export function EisenhowerView() {
 
 /* ── Task Card subcomponent ─────────────────────────────────────────────── */
 function TaskCard({ task, listColor, isMobile, onDragStart, onSelect, onContextMenu, onToggle, showDot }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
     <motion.div
       layout
@@ -359,6 +361,8 @@ function TaskCard({ task, listColor, isMobile, onDragStart, onSelect, onContextM
       onDragStart={(e) => { if (!isMobile) onDragStart(e, task.id); }}
       onClick={() => onSelect(task.id)}
       onContextMenu={(e) => { if (onContextMenu) onContextMenu(e, task); }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
@@ -373,13 +377,13 @@ function TaskCard({ task, listColor, isMobile, onDragStart, onSelect, onContextM
         cursor: 'grab',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px'
+        gap: '8px',
+        position: 'relative'
       }}
     >
-      {/* ── Feature 2: Colored list dot ──────────────────────────────── */}
+      {/* ── Colored list dot (Feature 2) ─────────────────────────────── */}
       {showDot && (
         <span
-          title={`Lista: ${listColor}`}
           style={{
             width: 8, height: 8, borderRadius: '50%',
             background: listColor, flexShrink: 0,
@@ -388,13 +392,22 @@ function TaskCard({ task, listColor, isMobile, onDragStart, onSelect, onContextM
         />
       )}
 
-      {/* Checkbox */}
+      {/* ── Hover-only complete button ────────────────────────────────── */}
       <div
-        className={`checkbox priority-${task.priority || 0}`}
         onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.is_completed); }}
-        style={{ width: '16px', height: '16px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+        title="Marcar como completada"
+        style={{
+          width: 16, height: 16, flexShrink: 0,
+          borderRadius: '4px',
+          border: hovered ? '1.5px solid rgba(255,255,255,0.35)' : '1.5px solid transparent',
+          background: hovered ? 'rgba(255,255,255,0.07)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease',
+          opacity: hovered ? 1 : 0
+        }}
       >
-        {task.is_completed && <Check size={10} color="#0f1115" />}
+        {hovered && <Check size={10} color="rgba(255,255,255,0.6)" />}
       </div>
 
       {/* Title */}
@@ -412,3 +425,4 @@ function TaskCard({ task, listColor, isMobile, onDragStart, onSelect, onContextM
     </motion.div>
   );
 }
+
